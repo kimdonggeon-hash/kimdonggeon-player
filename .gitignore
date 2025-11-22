@@ -42,3 +42,5 @@ Thumbs.db
 
 # Front assets (선택)
 *.map
+consent_logs/
+feedback_logs/
