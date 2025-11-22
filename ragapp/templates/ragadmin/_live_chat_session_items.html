@@ -1,0 +1,63 @@
+{# ragapp/templates/ragadmin/_live_chat_session_items.html #}
+{% load tz %}
+
+{% if sessions %}
+  {% for s in sessions %}
+    <li class="session-item"
+        data-session-id="{{ s.id }}"
+        data-history-note="{{ s.session_note|default_if_none:'' }}"
+        data-history-memo="{{ s.memo|default_if_none:s.session_note|default_if_none:'' }}">
+      <div class="session-item-main">
+        <div class="session-item-title">
+          {# 상단 라벨: 유형 / room / 상태 정도만 간단히 #}
+          {% if s.session_type %}
+            <span class="session-tag">{{ s.session_type }}</span>
+          {% else %}
+            <span class="session-tag session-tag--muted">유형 미지정</span>
+          {% endif %}
+          {% if s.room %}
+            <span class="session-room">방: {{ s.room }}</span>
+          {% endif %}
+          {% if s.status %}
+            <span class="session-status">· {{ s.status }}</span>
+          {% endif %}
+        </div>
+
+        <div class="session-item-note">
+          {% if s.session_note %}
+            {{ s.session_note }}
+          {% elif s.memo %}
+            {{ s.memo|truncatechars:80 }}
+          {% else %}
+            <span class="session-note-empty">메모 없음</span>
+          {% endif %}
+        </div>
+
+        <div class="session-meta">
+          <span class="session-meta-time">
+            {% if s.ended_at %}
+              종료: {{ s.ended_at|localtime|date:"Y-m-d H:i" }}
+            {% elif s.requested_at %}
+              요청: {{ s.requested_at|localtime|date:"Y-m-d H:i" }}
+            {% elif s.created_at %}
+              생성: {{ s.created_at|localtime|date:"Y-m-d H:i" }}
+            {% else %}
+              ID: #{{ s.id }}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <button type="button"
+              class="session-delete-btn"
+              title="이 세션 기록 삭제"
+              data-delete-session-id="{{ s.id }}">
+        삭제
+      </button>
+    </li>
+  {% endfor %}
+{% else %}
+  <li class="session-empty">
+    최근 상담 세션이 없습니다.
+  </li>
+{% endif %}

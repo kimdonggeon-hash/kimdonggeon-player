@@ -1,0 +1,29 @@
+{
+  "id": "bff665336e1842d9ad22cda12faed5a8",
+  "received_at": "2025-11-02T02:34:59.353189+00:00",
+  "client_ip_hash": "iphash:ba2464a9e0504663",
+  "user_agent_hash": "246d6b7fcb1fcb86",
+  "version": "v1",
+  "action": "accept",
+  "checkbox_checked": true,
+  "path": "/",
+  "ref_host": "",
+  "tz": "Asia/Seoul",
+  "locale": "ko-KR",
+  "consent_ok_cookie": true,
+  "session_flags": {
+    "visited_once": true,
+    "consent_ok": true
+  },
+  "forms": [
+    {
+      "action": ""
+    },
+    {
+      "action": ""
+    },
+    {
+      "action": ""
+    }
+  ]
+}

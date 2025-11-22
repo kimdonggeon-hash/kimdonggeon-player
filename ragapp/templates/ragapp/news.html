@@ -1,0 +1,1619 @@
+{% load static versioned_static %}
+{% url 'legal_privacy'  as legal_privacy_url %}
+{% url 'legal_tos'      as legal_tos_url %}
+{% url 'legal_overseas' as legal_overseas_url %}
+{% url 'legal_tester'   as legal_tester_url %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{ SERVICE_NAME|default:"RAG 통합 검색 콘솔" }}</title>
+
+<link rel="icon" href="{% static 'ragapp/favicon.ico' %}" />
+<meta name="theme-color" content="#0f172a" />
+<meta name="color-scheme" content="light dark" />
+
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<meta http-equiv="X-Content-Type-Options" content="nosniff" />
+<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
+{% if csp_nonce %}
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 img-src 'self' data: https:;
+                 font-src 'self' data:;
+                 style-src 'self' 'nonce-{{ csp_nonce }}';
+                 script-src 'self' 'nonce-{{ csp_nonce }}';
+                 connect-src 'self' https: ws: wss:;
+                 object-src 'none';
+                 frame-src 'none';
+                 frame-ancestors 'none';
+                 base-uri 'self';
+                 form-action 'self';
+                 upgrade-insecure-requests">
+{% endif %}
+
+<!-- ✅ 메인 디자인: 항상 최종적으로 적용될 핵심 CSS 두 개 -->
+<link rel="stylesheet" href="{% versioned_static 'ragapp/css/news.css' %}">
+<link rel="stylesheet" href="{% versioned_static 'ragapp/css/legal-bundle.css' %}">
+
+<style{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+  /* 법무 모달 열릴 때 스크롤 잠금 */
+  body.legal-open{ overflow:hidden; }
+  .legal-pane .auto-preline{ white-space:pre-line; }
+
+  /* ================================
+     검색 모드 탭 (웹 / RAG / PDF)
+     ================================ */
+  .mode-tabs{
+    grid-column: 1 / -1;
+    max-width: 960px;
+    margin: 0.35rem auto 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    border: 1px solid rgba(148,163,184,.45);
+    box-shadow: 0 10px 24px rgba(15,23,42,.08);
+  }
+  .mode-tab{
+    flex: 1 1 0;
+    border: none;
+    background: transparent;
+    padding: 0.32rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color .15s ease, color .15s ease,
+                box-shadow .15s ease, transform .15s ease;
+  }
+  .mode-tab.is-active{
+    background: #ffffff;
+    color: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(148,163,184,.4);
+    transform: translateY(-1px);
+  }
+  .mode-tab:focus-visible{
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+
+  /* 각 검색 모드 섹션은 항상 전체 폭 */
+  .mode-section{
+    grid-column: 1 / -1;
+  }
+  .mode-section[hidden]{
+    display:none !important;
+  }
+
+  /* 모드 전환 시 살짝 떠오르는 애니메이션 */
+  .mode-section.mode-anim{
+    animation: mode-fade-in .18s ease-out;
+  }
+  @keyframes mode-fade-in{
+    from{
+      opacity:0;
+      transform: translateY(6px);
+    }
+    to{
+      opacity:1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 초기 진입 시 카드/헤더가 부드럽게 올라오는 기본 애니메이션 */
+  .page-header,
+  .card,
+  .env-card{
+    animation: float-up .24s ease-out;
+    animation-fill-mode: both;
+  }
+  .card:nth-of-type(2){
+    animation-delay: .03s;
+  }
+  .card:nth-of-type(3){
+    animation-delay: .06s;
+  }
+  .env-card{
+    animation-delay: .08s;
+  }
+
+  @keyframes float-up{
+    from{
+      opacity:0;
+      transform: translateY(8px);
+    }
+    to{
+      opacity:1;
+      transform: translateY(0);
+    }
+  }
+
+  /* PDF 플레이스홀더 카드 살짝 다른 느낌 */
+  .card-pdf-placeholder .card-header{
+    background: linear-gradient(180deg,#eff6ff,#ffffff);
+  }
+  .card-pdf-placeholder .muted{
+    font-size:.86rem;
+  }
+
+  /* ================================
+     헤더 오른쪽 영역 + 멀티모달 메뉴
+     ================================ */
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* 예전 검정색 멀티 도구(legacy 버튼)는 강제로 숨김 */
+  .mm-toggle-btn,
+  .mm-popover {
+    display: none !important;
+  }
+
+  .mm-menu {
+    position: relative;
+  }
+
+  .mm-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.65);
+    background: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #111827;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    transition:
+      background-color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .mm-menu-btn:hover {
+    background: #f9fafb;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
+  }
+
+  .mm-menu-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 999px;
+    background: #e5e7eb;
+    font-size: 0.8rem;
+  }
+
+  /* ================================
+     헤더 오른쪽 영역 + 멀티 도구 드롭다운
+     ================================ */
+  .header-right{
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+  }
+
+  .mm-menu{
+    position:relative; /* 드롭다운 기준이 되는 박스 */
+  }
+
+  .mm-menu-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:0.35rem;
+    padding:0.45rem 0.8rem;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.65);
+    background:#ffffff;
+    font-size:0.8rem;
+    font-weight:700;
+    color:#111827;
+    cursor:pointer;
+    box-shadow:0 8px 20px rgba(15,23,42,.12);
+    transition:background-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .mm-menu-btn:hover{
+    background:#f9fafb;
+    transform:translateY(-1px);
+    box-shadow:0 12px 26px rgba(15,23,42,.16);
+  }
+  .mm-menu-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:1.3rem;
+    height:1.3rem;
+    border-radius:999px;
+    background:#e5e7eb;
+    font-size:0.8rem;
+  }
+
+  /* 🔽 멀티 도구 드롭다운: 버튼 기준 가운데 + 카드 위에 떠 있게 */
+  .mm-menu-panel{
+    position:absolute;
+    top:calc(100% + 10px);
+    left:50%;
+    transform:translateX(-50%) translateY(4px);
+
+    min-width:320px;
+    max-width:420px;
+    border-radius:0.85rem;
+    background:#ffffff;
+    border:1px solid rgba(148,163,184,.35);
+    box-shadow:0 18px 45px rgba(15,23,42,.22);
+    padding:0.7rem 0.8rem 0.9rem;
+
+    max-height:none;
+    overflow-y:visible;
+
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .14s ease, transform .14s ease;
+
+    /* 🔽 카드보다 확실히 위로 */
+    z-index: 1000;
+  }
+
+  .mm-menu-panel.is-open{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+    pointer-events:auto;
+  }
+
+  .mm-menu-panel .mm-launch-title{
+    text-align:center;
+    font-size:.78rem;
+    font-weight:700;
+    color:#4b5563;
+    margin-bottom:.45rem;
+  }
+
+  /* 이 안에서는 세로로 4개 쌓이게 */
+  .mm-menu-panel .mm-actions{
+    display:flex;
+    flex-direction:column;
+    gap:.38rem;
+  }
+
+  .mm-menu-panel .mm-pill{
+    width:100%;
+    justify-content:flex-start;
+    box-shadow:none;
+  }
+
+  /* 드롭다운 안에서 도구 카드 정렬 */
+  .mm-menu-panel .mm-launch {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .mm-menu-panel .mm-tag {
+    align-self: center;
+    margin-bottom: 0.1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.18rem 0.8rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid rgba(129, 140, 248, 0.6);
+  }
+
+  .mm-menu-panel .mm-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .mm-menu-panel .mm-pill {
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 0.7rem;
+    box-shadow: none;
+    background: #f9fafb;
+  }
+
+  @media (max-width: 900px) {
+    .mm-menu-panel {
+      left: 50%;
+      transform: translate(-50%, 8px) scale(0.98);
+    }
+  }
+
+  /* ================================
+     테마 토글 (라이트/시스템/다크)
+     ================================ */
+  .theme-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:0.25rem;
+    padding:0.2rem;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.65);
+    background:rgba(15,23,42,0.03);
+  }
+  .theme-btn{
+    border:none;
+    background:transparent;
+    padding:0.15rem 0.4rem;
+    border-radius:999px;
+    cursor:pointer;
+    font-size:0.8rem;
+    line-height:1;
+  }
+  .theme-btn.is-active{
+    background:rgba(37,99,235,0.1);
+    outline:1px solid rgba(37,99,235,0.7);
+  }
+
+  /* ================================
+     하단 테스터 고지 + 법무 바
+     ================================ */
+  .page-footer-wrap{
+    max-width:960px;
+    margin:0.9rem auto 2rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.55rem;
+  }
+
+  .page-footer-wrap .tester-notice{
+    margin:0 !important;
+    padding:0.7rem 0.9rem !important;
+    border-radius:0.9rem !important;
+    border-style:dashed !important;
+    border-width:1px !important;
+    border-color:rgba(129,140,248,.7) !important;
+    background:#eef2ff !important;
+    color:#1f2937 !important;
+    font-size:0.78rem !important;
+  }
+
+  .legal-footer-bar{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:0.5rem;
+    padding:0.55rem 0.9rem;
+    border-radius:999px;
+    background:#f9fafb;
+    border:1px solid rgba(209,213,219,.9);
+    font-size:0.8rem;
+    color:#6b7280;
+  }
+  .legal-footer-bar .legal-link{
+    color:#2563eb;
+    text-decoration:none;
+    font-weight:600;
+  }
+  .legal-footer-bar .legal-link:hover{
+    text-decoration:underline;
+  }
+  .legal-footer-bar .dot{
+    color:#9ca3af;
+  }
+
+  @media (max-width: 900px){
+    .mode-tabs,
+    .page-footer-wrap{
+      max-width:100%;
+      margin-inline:0;
+    }
+  }
+</style>
+
+
+</head>
+
+<body>
+<noscript>
+  <div style="background:#fee2e2;color:#7f1d1d;padding:12px 16px;text-align:center;font-weight:600;">
+    이 페이지는 자바스크립트가 필요합니다. 브라우저 설정에서 JavaScript를 활성화해 주세요.
+  </div>
+</noscript>
+
+{# ✅ 동의 모달 부분: 분리된 partial 사용 #}
+{% include "ragapp/partials/consent_overlay.html" %}
+
+{% comment %} {# =============================
+   메인 레이아웃 (헤더 + 모드 탭 + 카드들)
+   ============================= #} {% endcomment %}
+<div class="page-wrap" data-mode="web">
+
+  {# 상단 헤더: 서비스 이름 + 설명 + 멀티도구 햄버거 + QARAG 버튼 #}
+  <header class="page-header">
+    <div class="title-block">
+      <h1>
+        {{ SERVICE_NAME|default:"김동건의 포트폴리오" }}
+        <span class="badge">베타</span>
+      </h1>
+      <p class="subline">
+        위쪽에서 검색 방법(웹 / 내 문서 / PDF)을 고르고, 아래에서는 저장·인덱싱 상태를 쉽게 확인할 수 있어요.
+      </p>
+    </div>
+
+    <div class="nav-links">
+      <div class="header-right">
+        {# 멀티모달 도구 햄버거 #}
+        <div class="mm-menu">
+          <button type="button"
+                  id="mmMenuBtn"
+                  class="mm-menu-btn"
+                  aria-haspopup="true"
+                  aria-expanded="false">
+            <span class="mm-menu-icon">☰</span>
+            멀티 도구
+          </button>
+          <div id="mmMenuPanel" class="mm-menu-panel" hidden>
+            <div class="mm-launch-menu">
+              <div class="mm-launch-title">추가 도구</div>
+              <div class="mm-actions">
+                <a href="{% url 'media_index' %}" class="mm-pill" data-tool="media_index">
+                  🖼️ 이미지 모아두기
+                </a>
+                <a href="{% url 'media_search' %}" class="mm-pill" data-tool="media_search">
+                  🔎 글로 이미지 찾기
+                </a>
+                <a href="{% url 'table_index' %}" class="mm-pill" data-tool="table_index">
+                  📄 표 파일 저장하기
+                </a>
+                <a href="{% url 'table_search' %}" class="mm-pill" data-tool="table_search">
+                  📊 표에서 찾기
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# 테마 토글: 라이트 / 시스템 / 다크 #}
+        <div class="theme-toggle" aria-label="화면 모드 변경" role="group">
+          <button type="button"
+                  class="theme-btn"
+                  data-theme-choice="light"
+                  aria-pressed="false"
+                  title="라이트 모드">
+            ☀️
+          </button>
+          <button type="button"
+                  class="theme-btn"
+                  data-theme-choice="system"
+                  aria-pressed="false"
+                  title="시스템 설정 따라가기">
+            💻
+          </button>
+          <button type="button"
+                  class="theme-btn"
+                  data-theme-choice="dark"
+                  aria-pressed="false"
+                  title="다크 모드">
+            🌙
+          </button>
+        </div>
+
+        {# QARAG 토글 버튼 (id는 그대로 유지) #}
+        <button id="qaragLaunchBtn"
+                class="qa-launch-btn"
+                type="button"
+                aria-expanded="false">
+          <span class="qa-launch-icon">💬</span>
+          질문 챗봇
+        </button>
+      </div>
+    </div>
+  </header>
+
+  {# 검색 모드 탭: 웹 / RAG / PDF #}
+  <div class="mode-tabs" role="tablist" aria-label="검색 모드 선택">
+    <button type="button"
+            class="mode-tab is-active"
+            data-mode="web"
+            role="tab"
+            aria-selected="true">
+      웹 검색
+    </button>
+    <button type="button"
+            class="mode-tab"
+            data-mode="rag"
+            role="tab"
+            aria-selected="false">
+      AI 요약 검색
+    </button>
+    <button type="button"
+            class="mode-tab"
+            data-mode="pdf"
+            role="tab"
+            aria-selected="false">
+      PDF 검색
+    </button>
+  </div>
+
+  {# ▷ 웹 검색 모드: "웹에서 답 찾기 & 결과 저장" 카드만 표시 #}
+  <div id="modeSectionWeb" class="mode-section mode-anim" data-section="web" aria-hidden="false">
+    {% include "ragapp/partials/card_web.html" %}
+  </div>
+
+  {# ▷ RAG 검색 모드: "내 RAG 검색" 카드만 표시 #}
+  <div id="modeSectionRag" class="mode-section" data-section="rag" hidden aria-hidden="true">
+    {% include "ragapp/partials/card_rag.html" %}
+  </div>
+
+  {# ▷ PDF 검색 모드: 아직 기능 준비 중 — 친절한 안내 카드 #}
+  <div id="modeSectionPdf" class="mode-section" data-section="pdf" hidden aria-hidden="true">
+    <section class="card card-pdf-placeholder" aria-label="PDF 검색 (준비 중)">
+      <header class="card-header">
+        <div class="card-title-row">
+          <div class="card-title-left">
+            <h2>PDF 검색 (곧 사용할 수 있어요)</h2>
+          </div>
+        </div>
+        <p class="small-hint">
+          리포트, 과제, 계약서 같은 PDF 파일을 올리면
+          안에 있는 내용을 요약해 주고, 궁금한 부분만 골라서 질문할 수 있는 모드입니다.
+          다음 업데이트에서 정식으로 열릴 예정이에요.
+        </p>
+      </header>
+      <div class="card-body">
+        <p class="muted">
+          지금은 위쪽에서 <strong>웹 검색</strong> 또는 <strong>AI 요약 검색</strong> 모드를 선택해서 먼저 사용해 보세요.<br />
+          PDF 검색이 준비되면, 이 자리에서 바로 파일 업로드와 요약 기능을 쓸 수 있습니다.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  {# 환경/디버그 카드 #}
+  {% include "ragapp/partials/env_card.html" %}
+</div><!-- /page-wrap -->
+
+{# 하단: 테스터 고지 + 법무 링크 바 #}
+<div class="page-footer-wrap">
+  {% include "ragapp/partials/tester_notice.html" %}
+  <div class="legal-footer-bar">
+    <a href="{{ legal_privacy_url }}"  class="legal-link">개인정보처리방침</a>
+    <span class="dot">·</span>
+    <a href="{{ legal_tos_url }}"      class="legal-link">이용약관</a>
+    <span class="dot">·</span>
+    <a href="{{ legal_overseas_url }}" class="legal-link">국외이전 고지</a>
+  </div>
+</div>
+
+{% include "ragapp/partials/legal_bundle_modal.html" %}
+{% include "ragapp/partials/qarag_panel.html" %}
+
+<!-- =============================== -->
+<!-- Scripts -->
+<!-- =============================== -->
+
+<!-- 공통 유틸/로거 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  const buf = [];
+  window.dglog = function(tag, obj){
+    try{
+      const ts = new Date().toISOString().slice(11,23);
+      const line = { t:Date.now(), tag:String(tag||''), data: obj };
+      buf.push(line); if (buf.length>500) buf.shift();
+      const color = tag && /ERR|FAIL|ERROR|HTTP \d{3}/i.test(tag) ? 'color:#f87171' : 'color:#93c5fd';
+      console.log('%c[news '+ts+'] '+tag, color, obj||'');
+    }catch(_){}
+  };
+  window.__DG_EVENTS__ = buf;
+
+  window.newReqId = function(prefix){
+    return (prefix||'req')+'-'+Math.random().toString(36).slice(2,8)+'-'+Date.now().toString(36);
+  };
+})();
+</script>
+
+<!-- 프론트엔드 테마(라이트 / 다크 / 시스템) 토글 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  const STORAGE_KEY = 'dg-theme-mode';  // light / dark / system
+  const root = document.documentElement;
+  const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+
+  function resolveTheme(mode){
+    if (mode === 'system'){
+      if (mq && mq.matches) return 'dark';
+      return 'light';
+    }
+    return (mode === 'dark') ? 'dark' : 'light';
+  }
+
+  function applyTheme(mode){
+    const resolved = resolveTheme(mode);
+    root.dataset.themeMode = mode;
+    root.dataset.theme = resolved;
+
+    document.querySelectorAll('[data-theme-choice]').forEach(btn=>{
+      const active = btn.getAttribute('data-theme-choice') === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function loadMode(){
+    try{
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    }catch(_){}
+    return 'system';
+  }
+
+  function setMode(mode){
+    try{ localStorage.setItem(STORAGE_KEY, mode); }catch(_){}
+    applyTheme(mode);
+  }
+
+  const initialMode = loadMode();
+  applyTheme(initialMode);
+
+  if (mq && mq.addEventListener){
+    mq.addEventListener('change', function(){
+      const mode = root.dataset.themeMode || 'system';
+      if (mode === 'system') applyTheme('system');
+    });
+  }
+
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest && e.target.closest('[data-theme-choice]');
+    if (!btn) return;
+    const mode = btn.getAttribute('data-theme-choice') || 'system';
+    setMode(mode);
+  });
+})();
+</script>
+
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function () {
+  const CONSENT_KEY = 'rag_legal_consent_v2';
+  let _queued = null;
+
+  window.__SESSION_CONSENT__ = window.__SESSION_CONSENT__ || { ok: false };
+
+  function sanitizeAnchors(scopeSel){
+    try{
+      var root = document.querySelector(scopeSel) || document;
+      root.querySelectorAll('a[href]').forEach(function(a){
+        var href = a.getAttribute('href') || '';
+        try{
+          var u = new URL(href, location.origin);
+          if(!/^https?:$/i.test(u.protocol) && !u.pathname.startsWith('/')){
+            var span = document.createElement('span'); span.className = a.className;
+            span.textContent = a.textContent || href; a.replaceWith(span); return;
+          }
+          a.setAttribute('rel','noopener noreferrer nofollow');
+          a.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
+        }catch(_){
+          var s=document.createElement('span'); s.className=a.className; s.textContent=a.textContent||href; a.replaceWith(s);
+        }
+      });
+    }catch(_){}
+  }
+
+  window.collectWebSourcesFromDOM = window.collectWebSourcesFromDOM || function(){
+    var out=[]; document.querySelectorAll('.sources-list a[href^="http"]').forEach(function(a){
+      out.push({ title:(a.textContent||'').trim(), url:a.href });
+    }); return out;
+  };
+
+  function installForceAction(hiddenId, defaultAction) {
+    var hid=document.getElementById(hiddenId); var form=hid?hid.closest('form'):null; if(!form) return;
+    form.addEventListener('click', function (e) {
+      var btn=e.target.closest('button[type="submit"][data-action]'); if(!btn||!form.contains(btn)) return;
+      if (hid) hid.value = btn.dataset.action || hid.value || defaultAction;
+    }, true);
+  }
+
+  function installEnterSubmitFallback(form, defaultAction) {
+    form.addEventListener('submit', function () {
+      try {
+        var h=form.querySelector('input[name="action"][type="hidden"]');
+        if (h && !h.value) h.value = defaultAction;
+      } catch (_){}
+      return true;
+    }, { capture:true });
+  }
+
+  window.beforeWebSubmit = function(form){
+    try {
+      var ansBlock=document.getElementById('web-answer-block');
+      var ansField=document.getElementById('web_answer_payload');
+      if (ansBlock && ansField) ansField.value=(ansBlock.innerText||'').trim();
+      var srcField=document.getElementById('web_sources_payload');
+      if (srcField) {
+        var srcs=(window.collectWebSourcesFromDOM?collectWebSourcesFromDOM():[]);
+        try{ srcField.value=JSON.stringify(srcs||[]);}catch(_){ srcField.value='[]';}
+      }
+    } catch(_){}
+    return true;
+  };
+
+  window.ensureConsentGate = function(form){
+    try{
+      const requireConsent = form && form.matches('[data-require-consent="1"]');
+      const action = (form.querySelector('input[name="action"]')?.value || '').trim();
+      const hasSessionConsent = !!(window.__SESSION_CONSENT__ && window.__SESSION_CONSENT__.ok);
+
+      const need = requireConsent && action === 'web_ingest' && !hasSessionConsent;
+      if (!need) return true;
+
+      _queued = { form, action };
+
+      if (typeof window.__openConsentOverlay === 'function') {
+        window.__openConsentOverlay();
+      } else {
+        const ov  = document.getElementById('consentOverlay');
+        const err = document.getElementById('consentErr');
+        if (ov){ ov.hidden = false; }
+        if (err){ err.hidden = false; }
+      }
+      return false;
+    }catch(_){}
+    return true;
+  };
+
+  function wireQaragPanel(){
+    var launch=document.getElementById('qaragLaunchBtn');
+    var closeBtn=document.getElementById('qaragCloseBtn');
+    var panel=document.getElementById('qaragPanel');
+
+    function open(){
+      if(!panel) return;
+      panel.hidden = false;
+      panel.classList.add('show');
+      panel.removeAttribute('inert');
+      panel.setAttribute('aria-hidden','false');
+      launch?.setAttribute('aria-expanded','true');
+
+      var i=document.getElementById('qaragInput');
+      if(i) setTimeout(()=>i.focus(),0);
+    }
+    function close(){
+      if(!panel) return;
+
+      if (panel.contains(document.activeElement)) {
+        (launch || document.body).focus();
+      }
+
+      panel.setAttribute('inert','');
+      panel.setAttribute('aria-hidden','true');
+      panel.classList.remove('show');
+      launch?.setAttribute('aria-expanded','false');
+
+      setTimeout(()=>{ panel.hidden = true; }, 130);
+    }
+
+    window.openQaragPanel=open; window.closeQaragPanel=close;
+    launch && launch.addEventListener('click', function(e){ e.preventDefault(); open(); });
+    closeBtn && closeBtn.addEventListener('click', function(e){ e.preventDefault(); close(); });
+    document.addEventListener('keydown', function(ev){ if (ev.key==='Escape' && panel && !panel.hidden) close(); });
+  }
+
+  sanitizeAnchors('[data-sanitize-links]');
+  installForceAction('webActionField','web_search');
+  installForceAction('ragActionField','rag_search');
+
+  var webForm=document.getElementById('webActionField')?.closest('form');
+  var ragForm=document.getElementById('ragActionField')?.closest('form');
+  if (webForm) installEnterSubmitFallback(webForm,'web_search');
+  if (ragForm) installEnterSubmitFallback(ragForm,'rag_search');
+
+  document.getElementById('btn-copy-db')?.addEventListener('click', function(){
+    var t=document.getElementById('db-path')?.textContent?.trim();
+    if(!t) return;
+    navigator.clipboard.writeText(t).then(function(){ alert('복사됨: '+t); });
+  });
+
+  window.__CONSENT_QUEUE__ = {
+    get queued(){ return _queued; },
+    resume(){
+      const q = _queued; _queued = null;
+      if (!q || !q.form) return;
+      if (typeof q.form.requestSubmit === 'function') q.form.requestSubmit();
+      else q.form.submit();
+    },
+    key: CONSENT_KEY
+  };
+
+  wireQaragPanel();
+})();
+</script>
+
+<!-- 외부 JS -->
+<script src="{% versioned_static 'ragapp/javascript/news.js' %}"{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}></script>
+<script src="{% versioned_static 'ragapp/javascript/legal-bundle.js' %}"{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}></script>
+<script src="{% versioned_static 'ragapp/javascript/livechat_client.js' %}"{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}></script>
+
+<!-- 법적 모달·동의 게이트 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function () {
+  const $  = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+  const modal    = $('#legalBundleModal');
+  const backdrop = $('#legalBundleBackdrop');
+  let isOpen = false;
+
+  function applyPreline(el){
+    if (!el) return;
+    try{
+      const hasTag = /<[^>]+>/.test(el.innerHTML);
+      el.classList.toggle('preline', !hasTag);
+    }catch(_){}
+  }
+
+  function activateTabs(){
+    if (!modal) return;
+    const tabs  = $$('.legal-tab', modal);
+    const panes = $$('.legal-pane', modal);
+    const body  = $('.legal-body', modal);
+    const show = (sel) => {
+      tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.target === sel)));
+      panes.forEach(p => {
+        const on = ('#' + p.id) === sel;
+        p.toggleAttribute('hidden', !on);
+        p.setAttribute('aria-hidden', String(!on));
+        applyPreline(p);
+      });
+      body && body.scrollTo(0,0);
+    };
+    tabs.forEach(t => t.onclick = () => show(t.dataset.target));
+    tabs.forEach(p => applyPreline($('#'+p.dataset.target.slice(1))));
+    tabs[0] && show(tabs[0].dataset.target);
+  }
+
+  async function hydrateLegalIfEmpty(){
+    const sections = {
+      privacy: $('#pane-privacy'),
+      cross:   $('#pane-cross'),
+      tester:  $('#pane-tester'),
+      guide:   $('#pane-guide'),
+    };
+    const need = (el) => {
+      if (!el) return false;
+      const t = (el.textContent || '').trim();
+      return !t || /등록하세요|없습니다/i.test(t);
+    };
+    if (![sections.privacy, sections.cross, sections.tester, sections.guide].some(need)) return;
+
+    const endpoints = ['/api/legal_bundle','/legal/bundle','/api/legal','/legal.json'];
+    const isStr = (x) => typeof x === 'string' && x.trim().length > 0;
+
+    function flatten(obj, prefix=''){
+      const out = [];
+      if (!obj || typeof obj !== 'object') return out;
+      for (const [k, v] of Object.entries(obj)){
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (isStr(v)) out.push([key, v]);
+        else if (v && typeof v === 'object'){
+          for (const sub of ['html','HTML','text','TEXT','body','content','value']){
+            if (isStr(v[sub])) out.push([`${key}.${sub}`, v[sub]]);
+          }
+          out.push(...flatten(v, key));
+        }
+      }
+      return out;
+    }
+
+    function pickLike(data, regex){
+      const flat = flatten(data);
+      for (const [k, v] of flat){ if (regex.test(k) && /(^|\.)(html|HTML)$/.test(k)) return v; }
+      for (const [k, v] of flat){ if (regex.test(k)) return v; }
+      return '';
+    }
+
+    const pickFixed = (j, ...keys) => { for (const k of keys){ if (typeof j[k] === 'string' && j[k].trim()) return String(j[k]); } return ''; };
+
+    function setHTML(el, val){
+      if (!el || !(typeof val === 'string' && val.trim())) return;
+      const s = String(val);
+      if (/<[a-z][\s\S]*>/i.test(s)) {
+        el.innerHTML = s;
+      } else {
+        el.innerHTML = `<div class="auto-preline">${s.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
+      }
+      applyPreline(el);
+    }
+
+    for (const url of endpoints){
+      try{
+        const r = await fetch(url, {credentials:'same-origin'});
+        if (!r.ok) continue;
+        const txt = await r.text();
+        let j=null; try{ j = JSON.parse(txt); }catch(_){}
+        if (!j || typeof j !== 'object') continue;
+
+        let cross = pickFixed(j,
+          'cross_html','legal_cross_html','LEGAL_CROSS_HTML',
+          'overseas_html','overseas_transfer_html','LEGAL_OVERSEAS_HTML',
+          'LEGAL_OVERSEAS_NOTICE','LEGAL_CROSSBORDER_HTML',
+          'transfer_html','overseasNotice','crossBorder',
+          'LEGAL_CROSS_TEXT','CROSS_TEXT','OVERSEAS_TEXT','LEGAL_OVERSEAS_TEXT','LEGAL_CROSS','OVERSEAS_NOTICE_TEXT',
+          'LEGAL_RAW_OVERSEAS','overseas_plain','legal_overseas','legal_overseas_text','legal_overseas_notice',
+          'legal_cross','legal_cross_text','cross_notice',
+          'legal_bundle.cross_html','legal_bundle.overseas_html','legal_bundle.cross_text','legal_bundle.overseas_text','legal_bundle.cross','legal_bundle.overseas',
+          'LEGAL_BUNDLE.cross_html','LEGAL_BUNDLE.overseas_html','LEGAL_BUNDLE.cross_text','LEGAL_BUNDLE.overseas_text','LEGAL_BUNDLE.cross','LEGAL_BUNDLE.overseas'
+        );
+        if (!cross) cross = pickLike(j, /(cross|overseas|transfer)/i);
+
+        let privacy = pickFixed(j, 'privacy_html','legal_privacy_html','LEGAL_PRIVACY_HTML');
+        if (!privacy) privacy = pickLike(j, /(privacy|personal|policy)/i);
+
+        let tester = pickFixed(j, 'tester_html','legal_tester_html','LEGAL_TESTER_HTML');
+        if (!tester) tester = pickLike(j, /(tester|beta|qa)/i);
+
+        let guide = pickFixed(j, 'guide_html','legal_guide_html','LEGAL_guide_HTML','usage_html','HELP_HTML','guide');
+        if (!guide) guide = pickLike(j, /(guide|howto|usage|help)/i);
+
+        setHTML(sections.cross,   cross);
+        setHTML(sections.privacy, privacy);
+        setHTML(sections.tester,  tester);
+        setHTML(sections.guide,   guide);
+        break;
+      }catch(_){}
+    }
+  }
+
+  function openFallback(){
+    if (isOpen) return;
+    if (!modal || !backdrop) return;
+    isOpen = true;
+    modal.hidden = false; backdrop.hidden = false;
+    requestAnimationFrame(() => { modal.classList.add('show'); backdrop.classList.add('show'); });
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('legal-open');
+    activateTabs();
+    hydrateLegalIfEmpty();
+  }
+  function closeFallback(){
+    if (!isOpen) return;
+    isOpen = false;
+    modal.classList.remove('show'); backdrop.classList.remove('show');
+    modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('legal-open');
+    setTimeout(()=>{ modal.hidden = true; backdrop.hidden = true; }, 130);
+  }
+
+  window.LegalBundle = window.LegalBundle || {};
+  window.LegalBundle.open  = openFallback;
+  window.LegalBundle.close = closeFallback;
+
+  try {
+    const STORAGE_KEY = (window.__CONSENT_QUEUE__ && window.__CONSENT_QUEUE__.key) || 'rag_legal_consent_v2';
+    const overlay  = document.getElementById('consentOverlay');
+    const checkbox = document.getElementById('consent_required');
+    const confirm  = document.getElementById('consentConfirmBtn');
+    const err      = document.getElementById('consentErr');
+    const body     = document.body;
+
+    function openOverlay() {
+      if (!overlay) return;
+      overlay.hidden = false;
+      if (err) err.hidden = true;
+      if (body) body.classList.add('consent-overlay-open');
+    }
+
+    function closeOverlay() {
+      if (!overlay) return;
+      overlay.hidden = true;
+      if (err) err.hidden = true;
+      if (body) body.classList.remove('consent-overlay-open');
+    }
+
+    window.__openConsentOverlay = openOverlay;
+    window.__closeConsentOverlay = closeOverlay;
+
+    if (confirm) {
+      confirm.addEventListener('click', function () {
+        const ok = checkbox && checkbox.checked;
+        if (!ok) {
+          if (err) err.hidden = false;
+          return;
+        }
+
+        try {
+          if (!window.__SESSION_CONSENT__) window.__SESSION_CONSENT__ = { ok: false };
+          window.__SESSION_CONSENT__.ok = true;
+        } catch (_e) {}
+
+        closeOverlay();
+        try {
+          window.__CONSENT_QUEUE__ && window.__CONSENT_QUEUE__.resume();
+        } catch(_){}
+      });
+    }
+
+    openOverlay();
+  } catch(e) {
+    try { dglog && dglog('CONSENT_GATE_ERR', e); } catch(_){}
+  }
+})();
+</script>
+
+<!-- DM 전송(단일-플라이트) + 피드백 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  if (window.__QARAG_PATCHED__) return;
+  window.__QARAG_PATCHED__ = true;
+
+  function getCookie(name){
+    const v = document.cookie ? document.cookie.split('; ') : [];
+    for (const s of v){
+      const [k, ...rest] = s.split('=');
+      if (k === name) return decodeURIComponent(rest.join(''));
+    }
+    return null;
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  const lastMsg = { role:'', text:'', at:0 };
+
+  function addMsg(role, text){
+    const box = document.getElementById('qaragMessages');
+    if (!box) return null;
+
+    const now = Date.now();
+    const s = String(text || '');
+    if (role === lastMsg.role && s === lastMsg.text && (now - lastMsg.at) < 1500) {
+      return null;
+    }
+    lastMsg.role = role;
+    lastMsg.text = s;
+    lastMsg.at   = now;
+
+    const isUser = (role === 'user' || role === 'me' || role === 'operator-me');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'qarag-msgwrap ' + (isUser ? 'user' : 'bot');
+    wrap.style.display       = 'flex';
+    wrap.style.width         = '100%';
+    wrap.style.boxSizing     = 'border-box';
+    wrap.style.justifyContent = isUser ? 'flex-end' : 'flex-start';
+
+    const div = document.createElement('div');
+    div.className = 'qarag-msg ' + (isUser ? 'user' : 'bot');
+    div.textContent = s;
+
+    wrap.appendChild(div);
+    box.appendChild(wrap);
+    box.scrollTop = box.scrollHeight;
+    return wrap;
+  }
+
+  function makeFeedbackRow({question, answer}){
+    const row = document.createElement('div');
+    row.className = 'qarag-feedback-row';
+    row.dataset.answerType = 'rag';
+    row.dataset.question = question || '';
+    row.dataset.answer = answer || '';
+    row.dataset.sources = '[]';
+    row.dataset.logId = '';
+    row.innerHTML = `
+      <span class="label">도움이 되었나요?</span>
+      <button type="button" class="qarag-thumb-btn" data-helpful="true">👍 유용했어요</button>
+      <button type="button" class="qarag-thumb-btn" data-helpful="false">👎 별로였어요</button>`;
+    return row;
+  }
+
+  const BUSY = { inflight:false, lastQ:'', lastAt:0, ctrl:null };
+
+  const RAG_QA_MAIN = "{% url 'api_rag_qa' %}";
+
+  async function callRagAPI(q, signal){
+    const reqId = (window.newReqId && window.newReqId('rag')) || 'rag-'+Date.now();
+
+    const payload = {
+      query: q,
+      q: q,
+      question: q
+    };
+
+    const baseHeaders = {
+      'X-Request-Id': reqId
+    };
+    if (csrftoken) baseHeaders['X-CSRFToken'] = csrftoken;
+
+    const candidates = [
+      { url:'/api/rag_search',  method:'POST', json:true },
+      { url:'/api/rag_search/', method:'POST', json:true },
+      { url:RAG_QA_MAIN,        method:'POST', json:true },
+    ];
+
+    let lastErr = null;
+
+    for (const c of candidates){
+      try{
+        let url = c.url;
+        const headers = Object.assign({}, baseHeaders);
+        const init = {
+          method: c.method,
+          headers,
+          credentials: 'same-origin',
+          signal
+        };
+
+        if (c.json){
+          headers['Content-Type'] = 'application/json';
+          init.body = JSON.stringify(payload);
+        }
+
+        try {
+          if (typeof dglog === 'function') {
+            dglog('RAG FETCH → ' + url, { reqId, payload, method:c.method });
+          } else {
+            console.log('[qarag] RAG FETCH → ' + url, { reqId, payload, method:c.method });
+          }
+        } catch (_){}
+
+        const r = await fetch(url, init);
+        const text = await r.text();
+        let j = null;
+        try { j = JSON.parse(text); } catch(_){}
+
+        if (!r.ok){
+          lastErr = new Error('HTTP ' + r.status + ' @ ' + url);
+          continue;
+        }
+        if (j && j.ok === false){
+          lastErr = new Error((j.error || 'API 실패') + ' @ ' + url);
+          continue;
+        }
+
+        if (j){
+          const ans =
+            j.answer_text ||
+            j.answer ||
+            j.text ||
+            j.reply ||
+            j.result ||
+            j.a ||
+            j.data;
+          if (ans && String(ans).trim()){
+            return String(ans);
+          }
+        }
+
+        const fallback = (text || '').trim();
+        return fallback || '응답이 없습니다.';
+      }catch(e){
+        if (e && e.name === 'AbortError') throw e;
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('RAG API 호출 실패');
+  }
+
+  window.sendQarag = async function(ev){
+    if (ev && ev.preventDefault) ev.preventDefault();
+
+    const input = document.getElementById('qaragInput');
+    const btn   = document.getElementById('qaragSendBtn');
+    const q = (input?.value || '').trim();
+    if (!q) return false;
+
+    const now = Date.now();
+    if (BUSY.inflight || (BUSY.lastQ === q && (now - BUSY.lastAt) < 1200)) {
+      return false;
+    }
+    BUSY.inflight = true; BUSY.lastQ = q; BUSY.lastAt = now;
+
+    try{ BUSY.ctrl?.abort(); }catch(_){}
+    BUSY.ctrl = new AbortController();
+
+    addMsg('user', q);
+    if (input){ input.value=''; input.disabled = true; input.placeholder = '답변 생성 중…'; }
+    if (btn){ btn.disabled = true; btn.dataset.loading = '1'; }
+
+    try{
+      const answer = await callRagAPI(q, BUSY.ctrl.signal);
+      addMsg('bot', answer);
+      const box = document.getElementById('qaragMessages');
+      if (box){ box.appendChild(makeFeedbackRow({question:q, answer})); box.scrollTop = box.scrollHeight; }
+    }catch(e){
+      if (e && e.name !== 'AbortError') {
+        addMsg('bot', '❌ 오류: ' + (e && e.message ? e.message : '요청 실패'));
+        const box = document.getElementById('qaragMessages');
+        if (box){ box.appendChild(makeFeedbackRow({question:q, answer:'요청 실패'})); box.scrollTop = box.scrollHeight; }
+      }
+    }finally{
+      BUSY.inflight = false;
+      if (input){ input.disabled = false; input.placeholder = '메시지 보내기…'; input.focus(); }
+      if (btn){ btn.disabled = false; btn.removeAttribute('data-loading'); }
+    }
+    return false;
+  };
+
+  window.__qaragAddMsg = addMsg;
+})();
+</script>
+
+<!-- 피드백(웹/RAG/QARAG) -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  function getCookie(name){
+    const v = document.cookie ? document.cookie.split('; ') : [];
+    for (const s of v){
+      const [k, ...rest] = s.split('=');
+      if (k === name) return decodeURIComponent(rest.join(''));
+    }
+    return null;
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  async function postJSON(url, body){
+    const reqId = (window.newReqId && window.newReqId('fb')) || 'fb-'+Date.now();
+    dglog('FB POST → '+url, {reqId, body});
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': csrftoken || '','X-Request-Id':reqId},
+      body: JSON.stringify(body),
+      credentials: 'same-origin'
+    });
+    let json=null, text='';
+    try { text = await res.text(); json = JSON.parse(text); } catch(_){}
+    if (!res.ok || (json && json.ok === false)){
+      throw new Error((json && json.error) ? json.error : ('HTTP '+res.status+' '+(text||'')));
+    }
+    return json || {};
+  }
+  async function sendFeedback(payload){
+    try { return await postJSON('/api/feedback', payload); } catch(_){}
+    try { return await postJSON('/api/feedback/', payload); } catch(_){}
+    try { return await postJSON('/api/submit_feedback', payload); } catch(_){}
+    try { return await postJSON('/api/submit_feedback/', payload); } catch(_){}
+    try { return await postJSON('/submit_feedback', payload); } catch(_){}
+    return await postJSON('/submit_feedback/', payload);
+  }
+
+  const hasText = (s) => !!(s && String(s).trim().length);
+
+  function ensureRowData(row, base){
+    if (!hasText(base.question)){
+      base.question = (document.getElementById('query_web')?.value ||
+                       document.querySelector('input[name="query_rag"]')?.value || '').trim();
+    }
+    if (!hasText(base.answer)){
+      const webAns = (document.getElementById('web-answer-block')?.innerText || '').trim();
+      const ragAns = (document.getElementById('rag-answer-block')?.innerText || '').trim();
+      base.answer = (row.dataset.answerType === 'gemini') ? (webAns || ragAns) : (ragAns || webAns);
+    }
+    if (!Array.isArray(base.sources) || base.sources.length === 0){
+      try{
+        const list=[]; document.querySelectorAll('.sources-block .sources-list li').forEach(li=>{
+          const a=li.querySelector('a.src-title'); const s=li.querySelector('.src-title');
+          list.push({title:(a?a.textContent:(s?s.textContent:''))?.trim()||'',url:a?a.href:''});
+        });
+        base.sources = list.filter(x=>x.title||x.url);
+      }catch(_){ base.sources = []; }
+    }
+    return base;
+  }
+
+  function showCommentCard(row, base){
+    if (row.nextElementSibling && row.nextElementSibling.classList?.contains('feedback-prompt')) return;
+
+    const wrap=document.createElement('div');
+    wrap.className='feedback-prompt fb-card';
+    wrap.innerHTML = `
+      <div class="fb-ig-title">무엇이 별로였나요? <span class="fb-ig-pill">선택사항</span></div>
+      <div class="fb-ig-chips">
+        <button type="button" class="fb-ig-chip" data-t="정보가 오래됐어요">정보가 오래됐어요</button>
+        <button type="button" class="fb-ig-chip" data-t="의도를 오해했어요">의도를 오해했어요</button>
+        <button type="button" class="fb-ig-chip" data-t="너무 길어요">너무 길어요</button>
+      </div>
+      <div class="fb-ig-compose">
+        <textarea class="fb-ig-input" placeholder="메시지를 입력하세요… (Enter=전송 · Shift+Enter=줄바꿈)"></textarea>
+        <button type="button" class="fb-ig-send" title="보내기">➤</button>
+      </div>
+      <div class="fb-ig-actions">
+        <button type="button" class="fb-ig-skip">건너뛰기</button>
+      </div>`;
+
+    row.insertAdjacentElement('afterend', wrap);
+
+    const status = row.querySelector('.fb-status');
+    const input  = wrap.querySelector('.fb-ig-input');
+    const send   = wrap.querySelector('.fb-ig-send');
+
+    wrap.querySelectorAll('.fb-ig-chip').forEach(ch=>{
+      ch.addEventListener('click', ()=>{
+        ch.classList.toggle('is-on');
+        const t = ch.getAttribute('data-t')||'';
+        const cur = input.value.trim();
+        const parts = cur ? cur.split(/\s*;\s*|\s*\/\s*|\s*|\s*,\s*/).filter(Boolean) : [];
+        if (ch.classList.contains('is-on')){ if (!parts.includes(t)) parts.push(t); }
+        else { const idx = parts.indexOf(t); if (idx>=0) parts.splice(idx,1); }
+        input.value = parts.join(' / ');
+        input.style.height='0px'; input.style.height=Math.min(200,Math.max(72,input.scrollHeight))+'px';
+        input.focus();
+      });
+    });
+
+    const doSend = async (commentOrNull) => {
+      const payload = {
+        mode: (row.dataset.answerType === 'gemini') ? 'gemini' : 'rag',
+        helpful: false,
+        log_id: Number(row.dataset.logId || -1) || -1,
+        question: (row.dataset.question || '').trim(),
+        answer:   (row.dataset.answer   || '').trim(),
+        sources:  (()=>{try{return JSON.parse(row.dataset.sources||'[]')}catch(_){return []}})()
+      };
+      ensureRowData(row, payload);
+      if (!payload.question || !payload.answer){
+        if (status) status.textContent = '질문/답변이 없어 전송할 수 있어요.'; return;
+      }
+      if (commentOrNull) payload.feedback = commentOrNull;
+      row.querySelectorAll('.main-thumb-btn,.qarag-thumb-btn').forEach(b=>b.disabled=true);
+      if (status) status.textContent = '저장 중…';
+      try { await sendFeedback(payload);
+        if (status) status.textContent = '저장됨: 코멘트 감사합니다 🙏';
+        wrap.remove();
+      }
+      catch (e) {
+        if (status) status.textContent = '저장 실패: ' + e.message;
+        row.querySelectorAll('.main-thumb-btn,.qarag-thumb-btn').forEach(b=>b.disabled=false);
+      }
+    };
+
+    input.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        const txt = input.value.trim();
+        doSend(txt || null);
+      }
+    });
+    send.addEventListener('click', ()=>{
+      const txt = input.value.trim();
+      doSend(txt || null);
+    });
+    wrap.querySelector('.fb-ig-skip')?.addEventListener('click', ()=>doSend(null));
+  }
+
+  function __syncFeedbackDatasetOnce(){
+    try{
+      const webRow = document.querySelector('.main-feedback-row[data-answer-type="gemini"]');
+      if (webRow){
+        const q = (document.getElementById('query_web')?.value || webRow.dataset.question || '').trim();
+        const a = (document.getElementById('web-answer-block')?.innerText || webRow.dataset.answer || '').trim();
+        if (q) webRow.dataset.question = q;
+        if (a) webRow.dataset.answer = a;
+        if (!webRow.dataset.sources || webRow.dataset.sources === '[]'){
+          try{ webRow.dataset.sources = JSON.stringify(window.collectWebSourcesFromDOM?collectWebSourcesFromDOM():[]); }catch(_){}
+        }
+      }
+      const ragRow = document.querySelector('.main-feedback-row[data-answer-type="rag"]');
+      if (ragRow){
+        const rq = (document.querySelector('input[name="query_rag"]')?.value || ragRow.dataset.question || '').trim();
+        const ra = (document.getElementById('rag-answer-block')?.innerText || ragRow.dataset.answer || '').trim();
+        if (rq) ragRow.dataset.question = rq;
+        if (ra) ragRow.dataset.answer = ra;
+      }
+    }catch(_){}
+  }
+  document.addEventListener('DOMContentLoaded', __syncFeedbackDatasetOnce);
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest?.('.main-thumb-btn, .qarag-thumb-btn');
+    if (!btn) return;
+    const row = btn.closest('.main-feedback-row, .qarag-feedback-row');
+    if (!row || btn.disabled) return;
+
+    __syncFeedbackDatasetOnce();
+
+    let sources = [];
+    try { if (row.dataset.sources) sources = JSON.parse(row.dataset.sources); } catch (_){}
+
+    const base = {
+      question: (row.dataset.question || '').trim(),
+      answer: (row.dataset.answer || '').trim(),
+      answer_type: row.dataset.answerType || (row.classList.contains('qarag-feedback-row')?'rag':'unknown'),
+      is_helpful: (btn.dataset.helpful === "true"),
+      sources
+    };
+    const logId = (row.dataset.logId || '').trim();
+    if (logId) base.log_id = +logId;
+
+    if (base.is_helpful){
+      if (!base.question) base.question = (document.getElementById('query_web')?.value ||
+        document.querySelector('input[name="query_rag"]')?.value || '').trim();
+      if (!base.answer){
+        const webAns = (document.getElementById('web-answer-block')?.innerText || '').trim();
+        const ragAns = (document.getElementById('rag-answer-block')?.innerText || '').trim();
+        base.answer = (row.dataset.answerType === 'gemini') ? (webAns || ragAns) : (ragAns || webAns);
+      }
+      if (!base.question || !base.answer){
+        const warn = row.querySelector('.fb-status');
+        if (warn) { warn.textContent = '질문/답변이 비어 있어 전송할 수 없습니다.'; warn.style.color='#f87171'; }
+      } else {
+        (async ()=>{
+          try{
+            await sendFeedback({ mode: (row.dataset.answerType==='gemini'?'gemini':'rag'),
+                                 helpful:true, question:base.question, answer:base.answer, sources:base.sources, log_id:base.log_id });
+            const ok = row.querySelector('.fb-status'); if (ok) { ok.textContent='저장됨: 도움이 되었음'; ok.style.color='#4ade80'; }
+          }catch(err){
+            const st = row.querySelector('.fb-status'); if (st) { st.textContent='저장 실패: '+err.message; st.style.color='#f87171'; }
+          }
+        })();
+      }
+    } else {
+      showCommentCard(row, base);
+    }
+  });
+})();
+</script>
+
+<!-- 상담사 연결(WebSocket) 오버라이드 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  const ensureUserWS = window.ensureUserWS || function(){ return null; };
+  const sendHandoffOnce = window.sendHandoffOnce || function(){};
+
+  const baseSend = (typeof window.sendQarag === "function") ? window.sendQarag : null;
+
+  let humanMode = false;
+  let _lastUserSent = { text:'', at:0 };
+
+  function activateHandoff(){
+    const ids = ["btnConnectLive","qaragHandoffBtn"];
+    ids.forEach(id=>{
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("click", ()=>{
+        humanMode = true;
+        ensureUserWS();
+        sendHandoffOnce();
+        window.openQaragPanel && window.openQaragPanel();
+      });
+    });
+  }
+
+  function preRenderUserBubble(){
+    const input = document.getElementById("qaragInput");
+    const q = (input?.value || "").trim();
+    if (!q) return { q:"" };
+    if (window.__qaragAddMsg) window.__qaragAddMsg('user', q);
+    return { q, input };
+  }
+
+  window.sendQarag = function(ev){
+    ev && ev.preventDefault && ev.preventDefault();
+    const { q, input } = preRenderUserBubble();
+    if (!q) return false;
+
+    if (humanMode){
+      if (input){ input.value=""; input.focus(); }
+      _lastUserSent = { text:q, at:Date.now() };
+      try{
+        const ws = ensureUserWS();
+        ws && ws.send(JSON.stringify({ sender:"user", text:q }));
+      }catch(_){}
+      return false;
+    }
+
+    return (typeof baseSend === "function") ? baseSend(null) : false;
+  };
+
+  window.__filterWsMsg__ = function(obj){
+    const sender = (obj && obj.sender) || '';
+    const text   = (obj && (obj.text||obj.message||obj.msg||'')) || '';
+    if (sender === 'system' && /^connected:\s*(master lobby|room=)/i.test(text)) return true;
+    if (sender !== 'operator' && text && _lastUserSent.text === text && (Date.now() - _lastUserSent.at) < 2000) return true;
+    return false;
+  };
+
+  activateHandoff();
+})();
+</script>
+
+<!-- 검색 모드 탭 전환 로직 (웹 / RAG / PDF) + 멀티도구 햄버거 -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  const wrap = document.querySelector('.page-wrap');
+  if (!wrap) return;
+
+  const tabs = Array.from(document.querySelectorAll('.mode-tab'));
+  if (!tabs.length) return;
+
+  const sections = {
+    web: document.getElementById('modeSectionWeb'),
+    rag: document.getElementById('modeSectionRag'),
+    pdf: document.getElementById('modeSectionPdf'),
+  };
+
+  function restartAnim(el){
+    if (!el) return;
+    el.classList.remove('mode-anim');
+    void el.offsetWidth;       // 강제 리플로우로 애니메이션 재적용
+    el.classList.add('mode-anim');
+  }
+
+  function setMode(mode){
+    if (!sections[mode]) mode = 'web';
+    wrap.dataset.mode = mode;
+
+    tabs.forEach(tab=>{
+      const active = tab.dataset.mode === mode;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    Object.entries(sections).forEach(([key, el])=>{
+      if (!el) return;
+      const on = (key === mode);
+      el.hidden = !on;
+      el.setAttribute('aria-hidden', on ? 'false' : 'true');
+      if (on) restartAnim(el);
+    });
+  }
+
+  tabs.forEach(tab=>{
+    tab.addEventListener('click', function(e){
+      e.preventDefault();
+      setMode(tab.dataset.mode);
+    });
+  });
+
+  // ------- 멀티 도구 햄버거 드롭다운 ------- //
+  const mmBtn   = document.getElementById('mmMenuBtn');
+  const mmPanel = document.getElementById('mmMenuPanel');
+
+  if (mmBtn && mmPanel){
+    function toggleMenu(force){
+      const open = (typeof force === 'boolean') ? force : mmPanel.hidden;
+      mmPanel.hidden = !open;
+      if (open){
+        mmPanel.classList.add('is-open');
+        mmBtn.setAttribute('aria-expanded','true');
+      }else{
+        mmPanel.classList.remove('is-open');
+        mmBtn.setAttribute('aria-expanded','false');
+      }
+    }
+
+    mmBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    document.addEventListener('click', function(e){
+      if (!mmPanel.hidden &&
+          !mmPanel.contains(e.target) &&
+          e.target !== mmBtn &&
+          !mmBtn.contains(e.target)){
+        toggleMenu(false);
+      }
+    });
+
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && !mmPanel.hidden){
+        toggleMenu(false);
+      }
+    });
+  }
+
+  // 기본 모드는 웹 검색
+  setMode('web');
+})();
+</script>
+
+</body>
+</html>

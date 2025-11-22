@@ -1,0 +1,407 @@
+{% load static versioned_static %}
+{% url 'legal_guide' as legal_guide_url %}
+{% url 'legal_privacy' as legal_privacy_url %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAG Admin 대시보드</title>
+
+  <link rel="icon" href="{% static 'ragapp/favicon.ico' %}">
+  <!-- ✅ 캐시 자동 버전 CSS -->
+  <link rel="stylesheet" href="{% versioned_static 'ragapp/css/admin-dashboard.css' %}">
+
+  <style>
+    :root{
+      --bg:#050816;
+      --bg2:#020617;
+      --card:#0b1120;
+      --card-soft:#020617;
+      --border:rgba(148,163,184,.28);
+      --text:#e5e7eb;
+      --dim:#9ca3af;
+      --accent:#60a5fa;
+      --accent2:#a855f7;
+      --pill:#1f2937;
+      --radius:18px;
+    }
+    html,body{
+      margin:0;
+      padding:0;
+      background:radial-gradient(circle at top,#1d2648 0,#020617 55%,#000 100%);
+      color:var(--text);
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Noto Sans KR",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    .wrap{
+      max-width:1120px;
+      margin:32px auto 40px;
+      padding:0 20px;
+    }
+
+    /* ── HERO ─────────────────────────── */
+    .hero{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:18px;
+      margin-bottom:24px;
+    }
+    .hero-main{
+      padding:18px 20px 20px;
+      border-radius:24px;
+      border:1px solid rgba(148,163,184,.35);
+      background:
+        radial-gradient(circle at 0 0,rgba(96,165,250,.22),transparent 55%),
+        radial-gradient(circle at 100% 0,rgba(168,85,247,.22),transparent 60%),
+        linear-gradient(135deg,#020617,#020617);
+      box-shadow:0 24px 80px rgba(15,23,42,.9);
+      overflow:hidden;
+      flex:1 1 auto;
+    }
+    .hero-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom:8px;
+    }
+    .chip-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      font-size:11px;
+    }
+    .chip{
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.5);
+      background:rgba(15,23,42,.8);
+      color:#cbd5f5;
+    }
+    .hero-title{
+      font-size:24px;
+      font-weight:800;
+      letter-spacing:-0.02em;
+      margin-bottom:4px;
+    }
+    .hero-sub{
+      font-size:13px;
+      color:var(--dim);
+    }
+    .hero-badge{
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(15,23,42,.9);
+      border:1px solid rgba(148,163,184,.45);
+      font-size:11px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      color:#e5e7eb;
+      white-space:nowrap;
+    }
+    .dot{
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:radial-gradient(circle,#22c55e 0,#22c55e 40%,transparent 60%);
+      box-shadow:0 0 12px rgba(34,197,94,.7);
+    }
+    .hero-side{
+      min-width:200px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      font-size:12px;
+      color:var(--dim);
+    }
+    .hero-side-card{
+      border-radius:18px;
+      background:rgba(15,23,42,.85);
+      border:1px solid rgba(148,163,184,.35);
+      padding:10px 12px;
+    }
+    .hero-side-title{
+      font-size:12px;
+      font-weight:700;
+      margin-bottom:4px;
+      color:var(--text);
+    }
+    .hero-side-row{
+      display:flex;
+      justify-content:space-between;
+      gap:6px;
+    }
+    .hero-side-label{
+      color:var(--dim);
+    }
+    .hero-side-value{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:11px;
+      color:#e5e7eb;
+      text-overflow:ellipsis;
+      overflow:hidden;
+      white-space:nowrap;
+      max-width:160px;
+      text-align:right;
+    }
+
+    /* ── GRID & CARDS ─────────────────── */
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+      gap:16px;
+      margin-bottom:20px;
+    }
+    .card{
+      background:linear-gradient(145deg,rgba(15,23,42,.98),rgba(15,23,42,.92));
+      border-radius:var(--radius);
+      border:1px solid var(--border);
+      padding:16px 16px 14px;
+      box-shadow:0 16px 50px rgba(0,0,0,.6);
+      position:relative;
+      overflow:hidden;
+    }
+    .card::before{
+      content:"";
+      position:absolute;
+      inset:auto -40px -70px;
+      height:120px;
+      background:radial-gradient(circle at 50% 0,rgba(96,165,250,.22),transparent 60%);
+      opacity:.35;
+      pointer-events:none;
+    }
+    .card h3{
+      margin:0 0 6px;
+      font-size:16px;
+      font-weight:600;
+    }
+    .card p{
+      margin:0 0 12px;
+      font-size:13px;
+      color:var(--dim);
+    }
+    .btn-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      position:relative;
+      z-index:1;
+    }
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      height:32px;
+      padding:0 12px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.45);
+      background:rgba(15,23,42,.9);
+      color:#e5e7eb;
+      text-decoration:none;
+      font-size:12px;
+      font-weight:600;
+    }
+    .btn-accent{
+      border-color:rgba(96,165,250,.7);
+      background:linear-gradient(90deg,#60a5fa,#a855f7);
+      color:#0b1120;
+      box-shadow:0 10px 30px rgba(37,99,235,.6);
+    }
+    .btn-ghost{
+      background:transparent;
+    }
+    .pill{
+      display:inline-block;
+      margin-left:4px;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.45);
+      background:rgba(15,23,42,.9);
+      color:#cbd5f5;
+      font-size:11px;
+    }
+    .rows{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-top:8px;
+      position:relative;
+      z-index:1;
+    }
+    .foot{
+      margin-top:10px;
+      font-size:11px;
+      color:var(--dim);
+    }
+    code{
+      background:#020617;
+      border-radius:8px;
+      border:1px solid rgba(148,163,184,.35);
+      padding:2px 6px;
+      font-size:11px;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+
+    @media (max-width:900px){
+      .hero{
+        flex-direction:column;
+      }
+      .hero-side-value{
+        max-width:120px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <!-- HERO -->
+  <header class="hero">
+    <section class="hero-main">
+      <div class="hero-head">
+        <div class="chip-row">
+          <span class="chip">Admin · RAG 통합 검색 콘솔</span>
+          <span class="chip">벡터 스토어</span>
+          <span class="chip">FAQ · Live Chat</span>
+          <span class="chip">표 데이터(엑셀·CSV)</span> <!-- ✅ 표 기능 칩 추가 -->
+        </div>
+        <div class="hero-badge">
+          <span class="dot"></span>
+          <span>오늘 세션 관리 중</span>
+        </div>
+      </div>
+
+      <div class="hero-title">RAG Admin 대시보드</div>
+      <div class="hero-sub">
+        뉴스·문서·표 데이터를 검색 준비 상태로 만들어 두고, FAQ·실시간 상담·법적 문서를 한 화면에서 관리합니다.
+      </div>
+    </section>
+
+    <aside class="hero-side">
+      <div class="hero-side-card">
+        <div class="hero-side-title">환경 요약</div>
+        <div class="hero-side-row">
+          <span class="hero-side-label">벡터 DB</span>
+          <span class="hero-side-value">{{ VECTOR_DB_PATH|default:"(미설정)" }}</span>
+        </div>
+        <div class="hero-side-row">
+          <span class="hero-side-label">컬렉션</span>
+          <span class="hero-side-value">{{ CHROMA_COLLECTION|default:"-" }}</span>
+        </div>
+      </div>
+      <div class="hero-side-card">
+        <div class="hero-side-title">법적 문서</div>
+        <div class="hero-side-row">
+          <span class="hero-side-label">개인정보</span>
+          <span class="hero-side-value">
+            <a href="{{ legal_privacy_url }}" target="_blank" rel="noopener" style="color:#bfdbfe;text-decoration:none;">미리보기</a>
+          </span>
+        </div>
+        <div class="hero-side-row">
+          <span class="hero-side-label">이용 가이드</span>
+          <span class="hero-side-value">
+            <a href="{{ legal_guide_url }}" target="_blank" rel="noopener" style="color:#bfdbfe;text-decoration:none;">/guide</a>
+          </span>
+        </div>
+      </div>
+    </aside>
+  </header>
+
+  <!-- GRID CARDS -->
+  <main class="grid" aria-label="관리 메뉴">
+    <section class="card">
+      <h3>뉴스 크롤링 &amp; 인덱싱 <span class="pill">AUTO_INGEST={{ AUTO_INGEST_AFTER_GEMINI|default:"OFF" }}</span></h3>
+      <p>키워드·RSS·URL을 기준으로 기사 본문을 모으고, 검색용 벡터 DB에 정리합니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'ragadmin:crawl_news' %}">열기</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>문서 업로드</h3>
+      <p>PDF / TXT 문서를 여러 개 올려서 한 번에 텍스트 추출 → 청크 나누기 → 임베딩까지 처리합니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'ragadmin:upload_doc' %}">열기</a>
+      </div>
+    </section>
+
+    <!-- ✅ 표 기능 카드 + 규칙 관리 버튼 -->
+    <section class="card">
+      <h3>표 데이터 올려두기 (엑셀·CSV)</h3>
+      <p>엑셀에서 내보낸 CSV나 간단한 표 파일을 올려두면, 나중에 자연어 질문으로 다시 찾아볼 수 있습니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'table_index' %}">표 파일 저장하기</a>
+        <a class="btn btn-ghost" href="{% url 'table_search' %}">표에서 검색하기</a>
+        <!-- 🔽 하드코딩 대신 운영자가 조절하는 검색 규칙 화면 -->
+        <a class="btn btn-ghost" href="/admin/ragapp/tablesearchrule/">검색 규칙 관리</a>
+      </div>
+      <div class="rows">
+        <span class="pill">매출·정산표</span>
+        <span class="pill">지표·통계</span>
+        <span class="pill">로그 요약</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>FAQ 추천 &amp; 승격</h3>
+      <p>대화 로그를 바탕으로 자주 묻는 질문을 추천받고, 클릭 한 번으로 공식 FAQ로 올릴 수 있습니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'ragadmin:faq_suggest' %}">추천 보기</a>
+        <a class="btn btn-ghost" href="{% url 'ragadmin:faq_promote' %}">승격 관리</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>실시간 상담 콘솔</h3>
+      <p>QARAG에서 “상담사 연결”을 누른 요청을 보고, 운영자가 실시간으로 답변을 보낼 수 있는 화면입니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'ragadmin:live_chat' %}">실시간 상담 열기</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>법적 설정</h3>
+      <p>개인정보처리방침, 국외이전 고지, 이용 약관, 서비스 이용 가이드를 한 곳에서 관리합니다.</p>
+      <div class="btn-row">
+        <a class="btn btn-accent" href="{% url 'ragadmin:legal_entry' %}">설정 열기</a>
+        <a class="btn btn-ghost" href="{{ legal_privacy_url }}" target="_blank" rel="noopener">개인정보 미리보기</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>데이터 목록 (Admin)</h3>
+      <p>벡터 청크·로그·FAQ·표 스키마를 기본 Admin 리스트에서 바로 확인합니다.</p>
+      <div class="rows">
+        <!-- 고정 URL 사용 (역이름 실패 방지) -->
+        <a class="btn" href="/admin/ragapp/ragchunk/">RagChunk</a>
+        <a class="btn" href="/admin/ragapp/chatquerylog/">ChatQueryLog</a>
+        <a class="btn" href="/admin/ragapp/mylog/">MyLog</a>
+        <a class="btn" href="/admin/ragapp/faqentry/">FaqEntry</a>
+        <a class="btn" href="/admin/ragapp/tableschema/">TableSchema</a> <!-- ✅ 새로 추가 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- GUIDE CARD (하단 한 줄) -->
+  <section class="card" style="margin-top:4px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;">
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">이용 가이드</div>
+        <div style="font-size:13px;color:var(--dim);">테스터 안내·주의사항·빠른 시작 절차를 한 페이지로 정리한 설명서입니다.</div>
+      </div>
+      <div class="btn-row">
+        <a class="btn" href="{% url 'ragadmin:guide' %}">관리자 래퍼로 열기</a>
+        <a class="btn btn-ghost" href="{{ legal_guide_url }}" target="_blank" rel="noopener">/guide 새 탭</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    VECTOR_DB_PATH: <code>{{ VECTOR_DB_PATH|default:"(미설정)" }}</code>
+    · CHROMA_COLLECTION: <code>{{ CHROMA_COLLECTION|default:"-" }}</code>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# Python/Django
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+env/
+venv/
+db.sqlite3
+media/
+uploads/
+*.log
+keys/*.json
+*service-account*.json
+google-credentials*.json
+vertex-*.json
+
+# Env/Creds
+.env
+.env.*
+*.key
+*.pem
+*service-account*.json
+google-credentials*.json
+vertex-*.json
+
+# RAG / Vector DB (Chroma/SQLite/duckdb/parquet)
+chroma_db*/
+chroma*/
+*duckdb*/
+*.duckdb
+*.parquet
+*.sqlite
+*.sqlite3
+vector_store*/
+embeddings*/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Front assets (선택)
+*.map

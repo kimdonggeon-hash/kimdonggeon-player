@@ -1,0 +1,341 @@
+{% extends "admin/base_site.html" %}
+{% load static versioned_static %}
+
+{% block title %}문서 업로드 · 인덱싱 | {{ block.super }}{% endblock %}
+
+{% block extrastyle %}
+<link rel="stylesheet" href="{% versioned_static 'ragapp/css/upload_doc.css' %}">
+<style>
+  :root{
+    --bg:#0f172a;--card:#111827;--muted:#64748b;--text:#e5e7eb;--dim:#9ca3af;
+    --accent:#6366f1;--ok:#22c55e;--err:#ef4444;--warn:#f59e0b;--radius:14px;
+    --brd:#1f2937;--chip:#0b1220
+  }
+  .wrap{max-width:1040px;margin:32px auto;padding:0 16px}
+  .hero{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+  .h-ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+         background:linear-gradient(180deg,#1d4ed8,#1e40af);box-shadow:0 8px 22px rgba(37,99,235,.35)}
+  .h-title{font-weight:800;font-size:20px}
+  .h-sub{color:var(--dim);margin-top:2px}
+  .pill{display:inline-block;padding:2px 10px;border:1px solid #334155;border-radius:999px;color:#cbd5e1;font-size:12px}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,#0f172a,#0d1528 60%);border:1px solid var(--brd);border-radius:var(--radius);box-shadow:0 8px 22px rgba(0,0,0,.35)}
+  .pad{padding:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row.full{grid-column:1/-1}
+  .label{font-weight:700;margin-bottom:6px}
+  .input,.textarea{width:100%;background:#0b1220;border:1px solid #1f2937;border-radius:10px;color:var(--text);
+                   padding:10px 12px}
+  .textarea{min-height:140px;resize:vertical}
+  .hint{color:var(--dim);font-size:12px}
+  .drop{display:block;border:1px dashed #334155;border-radius:12px;background:#0b1220;padding:20px;text-align:center;cursor:pointer}
+  .drop input{display:none}
+  .drop .big{font-weight:800}
+  .drop .small{color:var(--dim);margin-top:4px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{background:var(--chip);border:1px solid #334155;border-radius:999px;padding:4px 8px;font-size:12px;color:#cbd5e1}
+  .actionbar{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid #1f2937;background:transparent}
+  .btn-cta{appearance:none;border:0;background:linear-gradient(180deg,#2563eb,#1d4ed8);color:#fff;
+           padding:10px 14px;border-radius:12px;font-weight:800;display:inline-flex;gap:8px;align-items:center}
+  .btn-cta[disabled]{opacity:.5;cursor:not-allowed}
+  .btn-clear{appearance:none;border:1px solid #334155;background:#0b1220;color:#e5e7eb;padding:9px 12px;border-radius:10px}
+  .ico{display:inline-grid;place-items:center}
+  .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .alert{border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  .alert.err{border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.09)}
+  .msg-area{margin-top:10px}
+  .msg{border:1px solid #334155;border-left:4px solid var(--accent);background:#0b1220;border-radius:8px;padding:8px 10px;margin:7px 0}
+  .msg.success{border-left-color:var(--ok)}
+  .msg.error{border-left-color:var(--err)}
+  .table{width:100%;border-collapse:collapse;margin-top:10px}
+  .table th,.table td{border-bottom:1px solid #1f2937;padding:10px 8px;text-align:left}
+  .pill.ok{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.15);color:#bbf7d0}
+  code.mono,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .hidden{display:none}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <!-- Header -->
+  <section class="hero" aria-label="문서 업로드 인덱싱">
+    <div class="h-ico">↑</div>
+    <div>
+      <div class="h-title">문서 업로드 → 인덱싱 <span class="pill" style="margin-left:6px">SQLite 벡터 스토어</span></div>
+      <div class="h-sub">PDF/TXT 여러 개를 한 번에 올려 텍스트 추출 → 청크 → 임베딩 → 인덱싱합니다.</div>
+    </div>
+  </section>
+
+  <!-- Django messages -->
+  {% if messages %}
+    <div class="msg-area" role="status" aria-live="polite">
+      {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- 오류 리스트 (뷰에서 errors 전달) -->
+  {% if errors %}
+    <div class="alert err" role="alert">
+      <div style="font-weight:800;margin-bottom:4px">오류</div>
+      <ul style="margin:0;padding-left:18px">
+        {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="grid">
+    <!-- LEFT: Form -->
+    <form class="card pad" id="uform" method="post" action="/ragadmin/upload-doc/" enctype="multipart/form-data" autocomplete="off" style="display:flex;flex-direction:column">
+      {% csrf_token %}
+      <div class="row">
+        <div>
+          <div class="label">공통 제목(선택)</div>
+          <input class="input" type="text" name="common_title" placeholder="비우면 각 파일명이 제목이 됩니다.">
+        </div>
+        <div>
+          <div class="label">소스명(선택)</div>
+          <input class="input" type="text" name="source_label" placeholder="예: 내부정책 / 가이드 / 배포노트">
+        </div>
+
+        <div class="row full">
+          <div class="label">파일 업로드(PDF/TXT · 여러 개)</div>
+          <label class="drop" id="drop" aria-label="파일 드래그 앤드롭 또는 클릭하여 선택">
+            <!-- 서버는 getlist('docfiles') 기준 -->
+            <input id="files" name="docfiles" type="file" multiple accept=".pdf,.txt,application/pdf,text/plain">
+            <div class="big">여기에 파일을 끌어다 놓거나 <u>클릭</u>하여 선택</div>
+            <div class="small">PDF는 페이지별 텍스트 추출·청크, TXT는 전체 본문 청크.</div>
+          </label>
+          <div class="chips" id="chips" aria-live="polite"></div>
+          <div class="hint" id="sum">선택된 파일 0개 · 0 B</div>
+        </div>
+
+        <div class="row full">
+          <div class="label">또는 텍스트 직접 붙여넣기(옵션)</div>
+          <!-- 서버는 request.POST['rawtext'] 사용 -->
+          <textarea class="textarea" id="rawtext" name="rawtext" placeholder="여기에 본문을 붙여넣어도 인덱싱 됩니다."></textarea>
+          <div class="hint">청크 사이즈/오버랩은 설정에서 관리됩니다. (기본 1600/200)</div>
+        </div>
+      </div>
+
+      <!-- Sticky Actionbar -->
+      <div class="actionbar">
+        <button class="btn-cta" id="submitBtn" type="submit" disabled>
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 3L4 14h6l-1 7 9-11h-6l1-7z" />
+            </svg>
+          </span>
+          <span class="txt">인덱싱 실행</span>
+          <span id="spin" class="spin hidden"></span>
+        </button>
+
+        <div class="hint status" id="statusHint" aria-live="polite"></div>
+        <button class="btn-clear" id="clearBtn" type="button">선택 초기화</button>
+      </div>
+    </form>
+
+    <!-- RIGHT: Help / Env -->
+    <aside class="card pad">
+      <div style="font-weight:800;margin-bottom:8px">간단 설명</div>
+      <ul style="margin:0;padding-left:18px;color:var(--muted)">
+        <li style="margin:6px 0">각 청크는 <code class="mono">doc_id</code> 기반 <code class="mono">ids</code>로 업서트되어 중복 최소화.</li>
+        <li style="margin:6px 0">오류 파일은 건너뛰고 나머지만 진행합니다.</li>
+        <li style="margin:6px 0">대량 업로드는 여러 번에 나눠 업로드 권장.</li>
+      </ul>
+
+      <div style="height:10px"></div>
+      <div style="font-weight:800;margin-bottom:6px">환경</div>
+      <div class="hint">MEDIA_URL: <span class="mono">{{ MEDIA_URL|default:"-" }}</span></div>
+      <div class="hint">MEDIA_ROOT: <span class="mono">{{ MEDIA_ROOT|default:"-" }}</span></div>
+      <div class="hint">VECTOR_DB_PATH: <span class="mono">{{ VECTOR_DB_PATH|default:"-" }}</span></div>
+      <div class="hint">CHROMA_COLLECTION: <span class="mono">{{ CHROMA_COLLECTION|default:"-" }}</span></div>
+    </aside>
+  </div>
+
+  <!-- 결과 요약 (AJAX로도 채움) -->
+  <section class="card pad hidden" id="ajaxResult" style="margin-top:14px" aria-live="polite"></section>
+
+  {% if result %}
+    <section class="card pad" id="results-ssr" style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:800">결과</div>
+        <div class="pill ok">업서트 {{ result.inserted }}/{{ result.total_chunks }} 청크</div>
+      </div>
+      {% if result.files %}
+      <div class="chips" style="margin-top:8px">
+        {% for f in result.files %}<span class="chip">{{ f }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      <div class="hint" style="margin-top:6px">같은 문서를 다시 올리면 중복이 최소화되도록 설계되어 있습니다.</div>
+    </section>
+  {% endif %}
+</div>
+
+<!-- 보조 스크립트 (CSP nonce 적용) -->
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
+(function(){
+  const $files = document.getElementById('files');
+  const $drop = document.getElementById('drop');
+  const $chips = document.getElementById('chips');
+  const $sum = document.getElementById('sum');
+  const $raw = document.getElementById('rawtext');
+  const $btn = document.getElementById('submitBtn');
+  const $spin = document.getElementById('spin');
+  const $clear = document.getElementById('clearBtn');
+  const $hint = document.getElementById('statusHint');
+  const $form = document.getElementById('uform');
+  const $ajaxResult = document.getElementById('ajaxResult');
+
+  function fmt(n){
+    if(!n && n !== 0) return '';
+    const units=['B','KB','MB','GB']; let i=0; let x=n;
+    while(x>=1024 && i<units.length-1){x/=1024;i++}
+    return (Math.round(x*10)/10)+' '+units[i];
+  }
+  function setBtn(){
+    const hasFiles = ($files.files && $files.files.length>0);
+    const hasText = ($raw.value.trim().length>0);
+    $btn.disabled = !(hasFiles || hasText);
+  }
+  function renderChips(){
+    $chips.innerHTML='';
+    let total=0;
+    if($files.files){
+      [...$files.files].forEach(f=>{
+        total += f.size||0;
+        const span=document.createElement('span');
+        span.className='chip';
+        span.textContent=f.name;
+        $chips.appendChild(span);
+      });
+    }
+    const cnt = ($files.files?$files.files.length:0);
+    $sum.textContent = `선택된 파일 ${cnt}개 · ${fmt(total)}`;
+  }
+  ['change','keyup'].forEach(ev=>{
+    $files.addEventListener(ev,()=>{renderChips();setBtn();});
+    $raw.addEventListener(ev,()=>{setBtn();});
+  });
+
+  // drag & drop
+  ['dragenter','dragover'].forEach(e=> $drop.addEventListener(e,(ev)=>{ev.preventDefault();$drop.style.borderColor='#4f46e5';}));
+  ['dragleave','drop'].forEach(e=> $drop.addEventListener(e,(ev)=>{ev.preventDefault();$drop.style.borderColor='';}));
+  $drop.addEventListener('drop',(ev)=>{
+    const dt=ev.dataTransfer;
+    if(dt && dt.files){ $files.files = dt.files; renderChips(); setBtn(); }
+  });
+
+  // clear
+  $clear.addEventListener('click', ()=>{
+    $files.value=''; $raw.value='';
+    renderChips(); setBtn(); $hint.textContent='';
+    $ajaxResult.classList.add('hidden'); $ajaxResult.innerHTML='';
+  });
+
+  // CSRF cookie
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? decodeURIComponent(m.pop()) : '';
+  }
+
+  function start(){
+    $btn.disabled = true;
+    $spin.classList.remove('hidden');
+    $hint.textContent = '인덱싱 중…';
+  }
+  function stop(){
+    $btn.disabled = false;
+    $spin.classList.add('hidden');
+  }
+
+  function renderSuccess(data){
+    const inserted = data.inserted_cnt ?? data.inserted ?? 0;
+    const duplicated = data.duplicated_cnt ?? data.duplicated ?? 0;
+    const failed = data.failed_cnt ?? data.failed ?? 0;
+    const files = data.files || data.processed_files || [];
+
+    $ajaxResult.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:800">결과</div>
+        <div class="pill ok">추가 ${inserted} · 중복 ${duplicated} · 실패 ${failed}</div>
+      </div>
+      ${files.length ? `<div class="chips" style="margin-top:8px">${files.map(f=>`<span class="chip">${f}</span>`).join('')}</div>` : ``}
+      <div class="hint" style="margin-top:6px">응답은 JSON만 처리합니다. 같은 문서를 다시 올리면 중복이 최소화됩니다.</div>
+    `;
+    $ajaxResult.classList.remove('hidden');
+    $hint.textContent = '완료';
+  }
+
+  function renderError(msg){
+    $ajaxResult.innerHTML = `
+      <div class="alert err">
+        <div style="font-weight:800;margin-bottom:4px">실패</div>
+        <div class="mono" style="white-space:pre-wrap">${msg}</div>
+      </div>`;
+    $ajaxResult.classList.remove('hidden');
+    $hint.textContent = '오류';
+  }
+
+  // 폼 제출을 fetch로 가로채기 (무한 스피너 방지 핵심)
+  $form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    start();
+    $ajaxResult.classList.add('hidden');
+    $ajaxResult.innerHTML='';
+
+    try{
+      const fd = new FormData($form);
+      const res = await fetch($form.action, {
+        method: 'POST',
+        body: fd,
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        redirect: 'manual'
+      });
+
+      // 세션 만료/권한 문제(리다이렉트) 잡기
+      if (res.type === 'opaqueredirect' || res.status === 0 || res.status === 302 || res.redirected) {
+        throw new Error('로그인(또는 권한) 리다이렉트가 감지되었습니다. 관리자 로그인을 다시 해주세요.');
+      }
+
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error(`HTTP ${res.status} 응답.\n${txt.slice(0, 400)}`);
+      }
+
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error('JSON이 아닌 응답을 받았습니다(아마 500/403/로그인 페이지).\n미리보기:\n' + txt.slice(0, 400));
+      }
+
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '서버에서 실패를 반환했습니다.');
+      renderSuccess(data);
+    } catch (err){
+      renderError(String(err));
+      console.error(err);
+    } finally {
+      stop();
+    }
+  });
+
+  // init
+  renderChips(); setBtn();
+})();
+</script>
+{% endblock %}
+
+{% block extrahead %}
+<!-- (선택) UI 보조 스크립트. 제출은 위의 inline 스크립트가 처리합니다. -->
+<script
+  src="{% versioned_static 'ragapp/javascript/upload_doc.ui.js' %}"
+  defer
+  {% if csp_nonce %}nonce="{{ csp_nonce }}"{% endif %}
+></script>
+{% endblock %}

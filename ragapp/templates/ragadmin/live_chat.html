@@ -1,0 +1,357 @@
+{% load static versioned_static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>실시간 상담 콘솔</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="icon" href="{% static 'ragapp/favicon.ico' %}">
+  <!-- 애플 감성 다크 UI CSS -->
+  <link rel="stylesheet" href="{% versioned_static 'ragapp/css/livechat_admin.css' %}">
+
+  <!-- 상담 기록 상태 pill 전용 (가볍게 오버라이드) -->
+  <style>
+    .session-status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      min-height: 1.4em;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: #a5b4fc;
+      white-space: nowrap;
+    }
+    .session-status-pill--idle {
+      opacity: 0.9;
+    }
+    .session-status-pill--need {
+      border-color: #f97373;
+      color: #fecaca;
+    }
+    .session-status-pill--saving {
+      border-style: dashed;
+      opacity: 0.95;
+    }
+    .session-status-pill--ok {
+      border-color: #4ade80;
+      color: #bbf7d0;
+    }
+    .session-status-pill--error {
+      border-color: #f97373;
+      color: #fecaca;
+    }
+  </style>
+</head>
+
+<body data-initial-room="{{ initial_room|default:'master' }}">
+  <div class="lc-wrap">
+    <header class="lc-header">
+      <div class="lc-header-main">
+        <h1 class="lc-header-title">실시간 상담 콘솔</h1>
+        <p class="lc-header-sub">
+          QARAG에서 들어온 상담 요청을 확인하고, 선택한 방에서 실시간으로 응답합니다.
+        </p>
+
+        <!-- 상단 요약 바 -->
+        <div class="summary-bar" id="livechatSummaryBar">
+          <span class="summary-pill summary-wait">
+            대기 <strong id="summaryWaitCount">0</strong>건
+          </span>
+          <span class="summary-pill summary-active">
+            진행 <strong id="summaryActiveCount">0</strong>건
+          </span>
+          <span class="summary-pill summary-done">
+            오늘 완료 <strong id="summaryDoneCount">0</strong>건
+          </span>
+          <button type="button"
+                  id="livechatCleanupBtn"
+                  class="summary-pill summary-clean"
+                  data-cleanup-url="{% url 'live_chat_cleanup' %}">
+            오늘 세션 정리
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="lc-layout">
+      <!-- LEFT: 실시간 대기 + 최근 세션 -->
+      <section class="card card-left">
+        <!-- 실시간 대기 목록 -->
+        <div class="sub-card">
+          <div class="sub-card-header">
+            <div>
+              <div class="sub-card-title">실시간 대기 목록</div>
+              <div class="sub-card-sub">
+                QARAG에서 “상담사 연결”을 누르면 아래에 방이 생성됩니다.
+              </div>
+              <div class="lobby-summary">
+                대기 중: <strong id="livechatLobbyCount">0</strong>건
+              </div>
+            </div>
+            <div id="livechatLobbyStatus" class="lobby-status">
+              로비 연결 상태: <strong>연결 시도 중...</strong>
+            </div>
+          </div>
+
+          <div class="lc-table-wrap">
+            <table class="lc-table">
+              <thead>
+                <tr>
+                  <th style="width:26%;">방 / 코드</th>
+                  <th>페이지</th>
+                  <th style="width:18%;">요청 시각</th>
+                  <th style="width:20%;text-align:right;">동작</th>
+                </tr>
+              </thead>
+              <tbody id="livechatLobbyBody">
+                <!-- JS가 handoff 이벤트로 채움 -->
+              </tbody>
+            </table>
+          </div>
+          <p id="livechatLobbyEmpty" class="lobby-empty">
+            현재 대기 중인 상담 요청이 없습니다.
+          </p>
+        </div>
+
+        <!-- 최근 상담 세션 -->
+        <div class="sub-card">
+          <div class="sub-card-header">
+            <div>
+              <div class="sub-card-title">최근 상담 세션</div>
+              <div class="sub-card-sub">저장된 상담 세션 요약입니다.</div>
+            </div>
+          </div>
+
+          {% if sessions %}
+            <ul class="session-list" data-recent-url="{% url 'live_chat_recent_sessions' %}">
+              {% for s in sessions %}
+                <li class="session-item"
+                    data-session-id="{{ s.id }}"
+                    data-history-room="{{ s.room|default_if_none:s.code|default_if_none:s.id }}"
+                    data-history-type="{{ s.get_session_type_display|default:s.session_type }}"
+                    data-history-note="{{ s.session_note|default_if_none:s.memo|default_if_none:s.note }}"
+                    data-history-memo="{{ s.memo }}">
+                  <div class="session-top-row">
+                    <span class="code-pill">
+                      {% if s.code %}{{ s.code }}{% else %}#{{ s.id }}{% endif %}
+                    </span>
+
+                    {% if s.status %}
+                      {% if s.status|stringformat:"s" == "대기" %}
+                        <span class="status-tag status-wait">대기</span>
+                      {% elif s.status|stringformat:"s" == "진행" %}
+                        <span class="status-tag status-wait">진행</span>
+                      {% elif s.status|stringformat:"s" == "종료" or s.status|stringformat:"s" == "ended" %}
+                        <span class="status-tag status-done">종료</span>
+                      {% else %}
+                        <span class="status-tag">{{ s.status }}</span>
+                      {% endif %}
+                    {% endif %}
+
+                    <!-- 🔹 개별 삭제 버튼 -->
+                    <button type="button"
+                            class="session-delete-btn"
+                            title="이 상담 기록 삭제"
+                            data-delete-session-id="{{ s.id }}"
+                            data-delete-url="{% url 'live_chat_cleanup' %}">
+                      삭제
+                    </button>
+                  </div>
+
+                  {# 문의 유형 + 메모 한 줄 (괄호/with 없이 순수 if만 사용) #}
+                  {% if s.get_session_type_display or s.session_type or s.session_note or s.memo or s.note %}
+                    <div class="meta meta-line">
+                      {% if s.get_session_type_display or s.session_type %}
+                        유형: {{ s.get_session_type_display|default:s.session_type }}
+                      {% endif %}
+
+                      {% if s.get_session_type_display or s.session_type %}
+                        {% if s.session_note or s.memo or s.note %}
+                          &nbsp;·&nbsp;
+                        {% endif %}
+                      {% endif %}
+
+                      {% if s.session_note or s.memo or s.note %}
+                        메모:
+                        {{ s.session_note|default_if_none:s.memo|default_if_none:s.note|truncatechars:40 }}
+                      {% endif %}
+                    </div>
+                  {% endif %}
+
+                  <div class="meta meta-line">
+                    {% if s.room %}룸: {{ s.room }} · {% endif %}
+                    {% if s.created_at %}
+                      {{ s.created_at|date:"Y-m-d H:i" }}
+                    {% elif s.requested_at %}
+                      {{ s.requested_at|date:"Y-m-d H:i" }}
+                    {% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+              {% include "ragadmin/_live_chat_session_items.html" %}
+            </ul>
+          {% else %}
+            <p class="meta">최근 저장된 상담 세션이 없습니다.</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- RIGHT: 선택한 상담 방 -->
+      <section class="card card-right">
+        <div class="card-header">
+          <div>
+            <div class="card-title">선택한 상담 방</div>
+            <p class="card-sub">
+              왼쪽 대기 목록에서 “연결”을 누른 뒤 이곳에서 대화합니다.
+            </p>
+          </div>
+          <div class="card-right-side">
+            <div id="livechatRoomStatus" class="room-status">
+              <span class="lc-dot-offline"></span> 연결되지 않음
+            </div>
+            <button type="button"
+                    class="end-btn"
+                    id="livechatEndBtn"
+                    disabled>
+              상담 종료
+            </button>
+          </div>
+        </div>
+
+        <!-- 방 헤더: 방 ID + 페이지/시작/코드 정보 -->
+        <div class="room-header">
+          <div class="room-header-left">
+            <span class="room-header-label">현재 방</span>
+            <span id="livechatRoomIdLabel" class="room-id-label">
+              방을 선택해 주세요
+            </span>
+          </div>
+          <div class="room-header-right">
+            <div class="room-meta-line">
+              <span class="room-meta-label">페이지</span>
+              <span class="room-meta-value" id="livechatRoomPage">-</span>
+            </div>
+            <div class="room-meta-line">
+              <span class="room-meta-label">시작</span>
+              <span class="room-meta-value" id="livechatRoomStartedAt">-</span>
+            </div>
+            <div class="room-meta-line">
+              <span class="room-meta-label">코드</span>
+              <span class="room-meta-value" id="livechatRoomCode">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="room-body">
+          <div id="livechatRoomEmpty" class="room-empty">
+            아직 메시지가 없습니다.
+          </div>
+          <div id="livechatRoomMessages"></div>
+        </div>
+
+        <!-- 퀵 답변 + 입력 폼 -->
+        <form id="livechatRoomForm">
+          <div class="quick-replies">
+            <span class="quick-replies-title">퀵 답변:</span>
+            <button type="button"
+                    class="qr-btn"
+                    data-snippet="안녕하세요 김동건의 포트폴리오입니다. 무엇을 도와드릴까요?">
+              기본 인사
+            </button>
+            <button type="button"
+                    class="qr-btn"
+                    data-snippet="잠시 확인해보고 다시 안내드리겠습니다.">
+              확인 중 안내
+            </button>
+            <button type="button"
+                    class="qr-btn"
+                    data-snippet="상담 도와드릴 수 있는 범위를 벗어나기 때문에 자세한 안내가 어렵습니다. 양해 부탁드립니다.">
+              범위 밖 안내
+            </button>
+            <button type="button"
+                    class="qr-btn"
+                    data-snippet="상담을 도와드릴 수 있어 기뻤습니다. 이용해 주셔서 감사합니다.">
+              마무리 인사
+            </button>
+          </div>
+
+          <div class="room-input-row">
+            <textarea
+              id="livechatRoomInput"
+              placeholder="상담사 메시지를 입력 후 Enter (Shift+Enter: 줄바꿈)"
+            ></textarea>
+            <button type="submit" class="send-btn">전송</button>
+          </div>
+        </form>
+
+        <!-- 세션 메타(유형/메모/상세 기록) -->
+        <section class="session-meta">
+          <div class="session-meta-col">
+            <label for="sessionType" class="session-meta-label">
+              문의 유형 (선택)
+            </label>
+            <select id="sessionType">
+              <option value="">선택 안 함</option>
+              <option value="signup">가입/로그인</option>
+              <option value="billing">요금/결제</option>
+              <option value="tech">기술 문의</option>
+              <option value="etc">기타</option>
+            </select>
+          </div>
+          <div class="session-meta-col">
+            <label for="sessionNote" class="session-meta-label">
+              세션 메모 (선택)
+            </label>
+            <input
+              id="sessionNote"
+              type="text"
+              placeholder="예: 결제 오류 문의, 콜백 요청 없음"
+            />
+          </div>
+
+          <div class="session-detail-row">
+            <label for="sessionDetail" class="session-meta-label">
+              상세 상담 기록
+            </label>
+            <textarea
+              id="sessionDetail"
+              class="session-detail-input"
+              placeholder="상담 요약, 다음에 이어서 참고할 내용 등을 자유롭게 기록하세요."
+            ></textarea>
+          </div>
+
+          <!-- 🔹 상담 기록 저장 버튼 + 상태 표시 -->
+          <div class="session-actions-row">
+            <button
+              type="button"
+              id="sessionSaveBtn"
+              class="session-save-btn send-btn"
+              data-save-url="/api/livechat/save-session/">
+              상담 기록 저장
+            </button>
+            <span
+              id="sessionStatusPill"
+              class="session-status-pill session-status-pill--idle"
+              aria-live="polite">
+              진행 중 · 저장 준비
+            </span>
+          </div>
+        </section>
+      </section>
+    </div>
+  </div>
+
+  <!-- 알림음 -->
+  <audio id="livechatNotifySound" preload="auto">
+    <source src="{% static 'ragapp/sounds/notify.mp3' %}" type="audio/mpeg" />
+  </audio>
+
+  <script
+    src="{% versioned_static 'ragapp/javascript/livechat_admin.js' %}"
+    {% if csp_nonce %}nonce="{{ csp_nonce }}"{% endif %}>
+  </script>
+</body>
+</html>
