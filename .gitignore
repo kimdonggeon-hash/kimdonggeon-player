@@ -9,10 +9,16 @@ db.sqlite3
 media/
 uploads/
 *.log
+*.log.*
+keys/
 keys/*.json
-*service-account*.json
-google-credentials*.json
-vertex-*.json
+
+# 테스트/툴 캐시
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Env/Creds
 .env
@@ -40,7 +46,12 @@ embeddings*/
 .DS_Store
 Thumbs.db
 
-# Front assets (선택)
+# Front/빌드 산출물 (쓰고 있다면)
+node_modules/
+dist/
+build/
 *.map
+
+# 로그/기록
 consent_logs/
 feedback_logs/
