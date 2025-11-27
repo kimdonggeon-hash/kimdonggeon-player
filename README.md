@@ -1,73 +1,46 @@
-# ragsite
+RAG 통합 검색 콘솔 + 질문 챗봇 + 실시간 상담
 
-# 이번 프로젝트는 100% chat gpt를 활용하여서 공부 하면서 내 능력을 최대한 올리는게 목적이였습니다
+## AI 활용 범위(투명성)
+- 사용: 리서치, 코드/문서 초안, 대안 비교, 리팩토링 아이디어, 디버깅 체크리스트
+- 미사용/직접수행: 요구사항 정의, 설계 결정, 핵심 로직 구현, 통합, 테스트, 운영/보안 반영
+- 원칙: 민감정보(API 키/개인정보/회사정보) 입력 금지, 적용 전 코드 리뷰 및 로컬 테스트
 
-# RAG 통합 검색 콘솔 (kimdonggeon-player)
+> 뉴스/문서(PDF/TXT)를 인덱싱해 RAG로 답변하고, 필요 시 WebSocket 실시간 상담으로 전환되는 AI 검색/상담 통합 웹서비스
+---
 
-Django 기반으로 만든 **뉴스/문서 RAG 검색 + 실시간 상담 콘솔 + 로그/동의 관리** 프로젝트입니다.  
-테스터가 웹에서 질문을 넣으면, 수집한 뉴스/문서/멀티모달 임베딩을 이용해 답변을 생성하고,  
-필요하면 상담사와 실시간 채팅(라이브챗)으로 이어주는 구조입니다.
+## 1) 한눈에 보기 (TL;DR)
+- **문서 업로드(PDF/TXT/붙여넣기)** → 텍스트 추출/청킹 → 임베딩 → **벡터DB(SQLite 기반 vector store)** 저장
+- **질문 챗봇(RAG)**: top-k 검색 컨텍스트로 답변 생성
+- **실시간 상담(WebSocket)**: 챗봇으로 해결이 안 될 때 상담사 콘솔로 전환
+- **운영/보안 기본기**: 동의(Consent) 흐름, 로깅, CSRF/보안헤더, robots.txt 준수 크롤링
 
 ---
 
-## 주요 기능
+## 2) 주요 기능
+### 질문 챗봇(RAG)
+- 질의 → top-k 문서 검색 → 컨텍스트 구성 → 답변 생성
+- (있으면) 출처/근거 표시, 안전 요약 옵션
 
-- **RAG 웹 검색**
-  - 뉴스/문서 인덱싱 후, 사용자가 입력한 질문에 관련 문서 기반 답변 생성
-  - 검색 기록/피드백 버튼(유용/별로)을 통한 품질 로그 저장
+### 문서 업로드 & 인덱싱
+- PDF/TXT 파일 업로드, 붙여넣기 텍스트 지원
+- 처리 결과/에러를 사용자에게 친절히 표시
 
-- **멀티모달 / 벡터 스토어**
-  - 텍스트/표/이미지 등 임베딩 후 벡터 스토어(Chroma / SQLite / 등) 저장
-  - 뉴스/문서 검색, 미디어 검색 등의 백엔드로 사용
+### 뉴스 수집(크롤링)
+- robots.txt 준수
+- (선택) 메타 기반 안전 요약/인덱싱
 
-- **실시간 상담 (Live Chat)**
-  - 사용자 페이지(QARAG 질문 챗봇)와 어드민 상담사 콘솔 간 실시간 채팅
-  - 상담 세션 시작/종료, 상담 이력 관리
-
-- **법무/동의 관리**
-  - 개인정보처리방침, 이용약관, 국외이전, 테스터 동의서 등 렌더링
-  - 동의 로그(ConsentLog), 피드백 로그(FeedbackLog) 별도 저장 디렉토리 관리
-
-- **관리자(Admin) 화면**
-  - 뉴스 크롤링 & 인덱싱 콘솔
-  - 업로드 문서 인덱싱 뷰
-  - RAG 설정, 로그 조회 등
+### 실시간 상담 콘솔
+- Django Channels(WebSocket)
+- 세션 상태(대기/진행/종료) 관리
+- 상담사 ↔ 사용자 메시지 양방향 동기화
 
 ---
 
-## 기술 스택
-
-- **Backend**
-  - Python 3.10+
-  - Django
-  - Django Admin
-- **AI / RAG**
-  - Vertex AI Embeddings / Gemini (텍스트/멀티모달)
-  - Chroma / SQLite / 기타 벡터 스토어
-- **Frontend**
-  - 기본 HTML/CSS/JS (뉴스 검색 화면, QARAG 챗 UI, 라이브챗 콘솔)
-- **기타**
-  - Git / GitHub
-  - 가상환경: `venv` (`.venv` 폴더)
+## 3) 기술 스택
+- Backend: **Python, Django, Django ORM, Django Channels(WebSocket)**
+- Frontend: **HTML/CSS, JavaScript(AJAX/Fetch)**
+- DB: **SQLite** (서비스/벡터 저장), (선택) ChromaDB 사용 경험
+- Crawling: **requests, BeautifulSoup, robotparser**
+- Etc: Git, .env 환경변수
 
 ---
-
-## 폴더 구조 (요약)
-
-> 실제 폴더는 일부 다를 수 있으니 참고용입니다.
-
-```text
-project_root/
-├─ manage.py
-├─ ragsite/                # Django 프로젝트 설정 (settings, urls, asgi 등)
-├─ ragapp/                 # 핵심 앱: RAG, 뉴스, 라이브챗, 로그 모델 등
-│  ├─ templates/
-│  │  ├─ ragapp/news.html          # 메인 검색/챗 화면
-│  │  └─ ragadmin/...              # 관리자용 템플릿
-│  ├─ static/ragapp/               # CSS, JS, 이미지 등
-│  ├─ services/                    # RAG, 임베딩, 크롤러 유틸
-│  └─ livechat/                    # 실시간 상담 관련 코드
-├─ scripts/                # 크롤링, 인덱싱, 마이그레이션 스크립트
-├─ requirements.txt        # Python 패키지 목록
-├─ .env.example            # 환경 변수 예시 (실제 키는 여기에 넣지 않음)
-└─ README.md
